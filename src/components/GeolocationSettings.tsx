@@ -1,0 +1,192 @@
+
+import { useState, useEffect } from 'react';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { firestore } from '@/lib/firebase';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Check, MapPin, Settings } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { Slider } from '@/components/ui/slider';
+
+const GeolocationSettings = () => {
+  const [centerLatitude, setCenterLatitude] = useState(22.6288); // Default Adamas University coordinates
+  const [centerLongitude, setCenterLongitude] = useState(88.4682);
+  const [radiusInMeters, setRadiusInMeters] = useState(500); // Default 500m radius
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const settingsRef = doc(firestore, 'settings', 'geolocation');
+        const settingsDoc = await getDoc(settingsRef);
+        
+        if (settingsDoc.exists()) {
+          const data = settingsDoc.data();
+          setCenterLatitude(data.centerLatitude);
+          setCenterLongitude(data.centerLongitude);
+          setRadiusInMeters(data.radiusInMeters);
+        }
+      } catch (error) {
+        console.error("Error fetching geolocation settings:", error);
+      }
+    };
+    
+    fetchSettings();
+  }, []);
+
+  const handleSaveSettings = async () => {
+    setIsSubmitting(true);
+    try {
+      await setDoc(doc(firestore, 'settings', 'geolocation'), {
+        centerLatitude: Number(centerLatitude),
+        centerLongitude: Number(centerLongitude),
+        radiusInMeters: Number(radiusInMeters),
+      });
+      
+      toast({
+        title: "Settings Saved",
+        description: "Geolocation settings have been updated.",
+      });
+    } catch (error) {
+      console.error("Error saving geolocation settings:", error);
+      toast({
+        title: "Error",
+        description: "Failed to save geolocation settings.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const getCurrentLocation = () => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setCenterLatitude(position.coords.latitude);
+          setCenterLongitude(position.coords.longitude);
+          
+          toast({
+            title: "Location Updated",
+            description: "Current location has been set.",
+          });
+        },
+        (error) => {
+          console.error("Geolocation error:", error);
+          toast({
+            title: "Geolocation Error",
+            description: error.message,
+            variant: "destructive",
+          });
+        }
+      );
+    } else {
+      toast({
+        title: "Geolocation Not Supported",
+        description: "Your browser does not support geolocation.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center">
+          <Settings className="h-5 w-5 mr-2" />
+          Geolocation Settings
+        </CardTitle>
+        <CardDescription>
+          Configure campus boundaries for attendance verification
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="centerLatitude">Latitude</Label>
+            <div className="flex space-x-2">
+              <Input
+                id="centerLatitude"
+                type="number"
+                step="0.000001"
+                value={centerLatitude}
+                onChange={(e) => setCenterLatitude(parseFloat(e.target.value))}
+                placeholder="Campus latitude"
+              />
+            </div>
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="centerLongitude">Longitude</Label>
+            <div className="flex space-x-2">
+              <Input
+                id="centerLongitude"
+                type="number"
+                step="0.000001"
+                value={centerLongitude}
+                onChange={(e) => setCenterLongitude(parseFloat(e.target.value))}
+                placeholder="Campus longitude"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex justify-between">
+            <Label htmlFor="radiusSlider">Radius: {radiusInMeters} meters</Label>
+            <span className="text-xs text-muted-foreground">
+              {radiusInMeters < 1000 ? `${radiusInMeters}m` : `${(radiusInMeters / 1000).toFixed(1)}km`}
+            </span>
+          </div>
+          <Slider
+            id="radiusSlider"
+            min={50}
+            max={2000}
+            step={50}
+            value={[radiusInMeters]}
+            onValueChange={(value) => setRadiusInMeters(value[0])}
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            Students must be within this radius to mark attendance
+          </p>
+        </div>
+
+        <div className="flex flex-col space-y-2">
+          <Button onClick={getCurrentLocation} variant="outline">
+            <MapPin className="h-4 w-4 mr-2" />
+            Use Current Location
+          </Button>
+          <p className="text-xs text-muted-foreground text-center">
+            Sets the center point to your current location
+          </p>
+        </div>
+
+        <Button 
+          onClick={handleSaveSettings}
+          disabled={isSubmitting}
+          className="w-full gradient-bg"
+        >
+          {isSubmitting ? (
+            <>
+              <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              Saving...
+            </>
+          ) : (
+            <>
+              <Check className="h-4 w-4 mr-2" />
+              Save Settings
+            </>
+          )}
+        </Button>
+      </CardContent>
+    </Card>
+  );
+};
+
+export default GeolocationSettings;
