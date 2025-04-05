@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import LiveAttendanceSheet from '@/components/LiveAttendanceSheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/hooks/useAuth';
+import UserReports from '@/components/UserReports';
 
 interface AdminPanelProps {
   selectedClass: Class;
@@ -37,9 +38,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
       </Card>
       
       <Tabs defaultValue="live">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="live">Live Attendance</TabsTrigger>
           <TabsTrigger value="reports">Attendance Reports</TabsTrigger>
+          <TabsTrigger value="userReports">User Issues</TabsTrigger>
         </TabsList>
         
         <TabsContent value="live">
@@ -56,6 +58,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
               <p>Attendance reports will be available here.</p>
             </CardContent>
           </Card>
+        </TabsContent>
+        
+        <TabsContent value="userReports">
+          <UserReports />
         </TabsContent>
       </Tabs>
     </div>
