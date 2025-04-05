@@ -6,7 +6,7 @@ import { firestore } from '@/lib/firebase';
 // Default campus coordinates
 const CAMPUS_LATITUDE = 22.650206701740068;
 const CAMPUS_LONGITUDE = 88.43129649251308;
-const DEFAULT_MAX_DISTANCE = 500; // Increased from 300 to 500 meters for better tolerance
+const DEFAULT_MAX_DISTANCE = 100; // Reduced from 800 to 100 meters as requested
 
 interface GeolocationPosition {
   latitude: number;
@@ -43,7 +43,9 @@ export const useGeolocation = () => {
           }
           
           if (data.radiusInMeters) {
-            setMaxAllowedDistance(data.radiusInMeters);
+            // Ensure radius is within min and max bounds (10-100m)
+            const radius = Math.min(Math.max(data.radiusInMeters, 10), 100);
+            setMaxAllowedDistance(radius);
           }
         }
       } catch (err) {
@@ -75,14 +77,20 @@ export const useGeolocation = () => {
     return distance;
   };
 
-  // Check if a position is within campus bounds with more tolerance for accuracy
+  // Check if a position is within campus bounds with improved accuracy handling
   const checkLocation = (position: GeolocationPosition, maxDistance = maxAllowedDistance) => {
     const calculatedDistance = getDistanceFromCampus(position);
     setDistance(calculatedDistance);
     
-    // Account for GPS accuracy by adding it to the allowed distance
-    const adjustedMaxDistance = maxDistance + (position.accuracy / 2);
-    const withinCampus = calculatedDistance <= adjustedMaxDistance;
+    // More generous accuracy adjustment for better user experience
+    // If the GPS accuracy is low, be more lenient with the distance check
+    const accuracyFactor = position.accuracy > 100 ? 2 : 1.5;
+    const adjustedMaxDistance = maxDistance + (position.accuracy / accuracyFactor);
+    
+    // For very close distances, always consider within campus if within reasonable accuracy
+    const isVeryClose = calculatedDistance <= (maxDistance / 2);
+    
+    const withinCampus = isVeryClose || calculatedDistance <= adjustedMaxDistance;
     
     console.log(`Distance to campus: ${calculatedDistance.toFixed(2)}m, Max allowed: ${adjustedMaxDistance.toFixed(2)}m (Including accuracy adjustment), Result: ${withinCampus ? 'Within campus' : 'Outside campus'}`);
     
@@ -90,7 +98,7 @@ export const useGeolocation = () => {
     return withinCampus;
   };
 
-  // Get current position
+  // Get current position with improved location watching
   useEffect(() => {
     if (!navigator.geolocation) {
       setError('Geolocation is not supported by your browser');
@@ -102,16 +110,35 @@ export const useGeolocation = () => {
       const { latitude, longitude, accuracy } = position;
       const locationData = { latitude, longitude, accuracy };
       
+      console.log(`Got location: Lat ${latitude}, Long ${longitude}, Accuracy: ${accuracy}m`);
+      
       setCurrentLocation(locationData);
       checkLocation(locationData);
       setLoading(false);
     };
 
     const handleError = (error: any) => {
+      console.error(`Geolocation error (${error.code}): ${error.message}`);
       setError(`Error getting location: ${error.message}`);
       setLoading(false);
     };
 
+    // Initial position request with high accuracy
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => handleSuccess({
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        accuracy: coords.accuracy
+      }),
+      handleError,
+      {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 0
+      }
+    );
+
+    // Then continue watching position with more frequent updates
     const watchId = navigator.geolocation.watchPosition(
       ({ coords }) => handleSuccess({
         latitude: coords.latitude,
@@ -126,6 +153,7 @@ export const useGeolocation = () => {
       }
     );
 
+    // Clean up watch on unmount
     return () => {
       navigator.geolocation.clearWatch(watchId);
     };

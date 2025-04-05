@@ -5,6 +5,7 @@ import Dashboard from './Dashboard';
 import Header from './Header';
 import Footer from './Footer';
 import { Loader2 } from 'lucide-react';
+import EmailVerification from './EmailVerification';
 
 const LoginView = () => {
   const { currentUser, loading, deviceVerificationLoading, isDeviceVerified } = useAuth();
@@ -20,6 +21,9 @@ const LoginView = () => {
     );
   }
 
+  // Only show dashboard if user is verified, otherwise show login form with verification notice
+  const showDashboard = currentUser && currentUser.emailVerified && isDeviceVerified;
+
   return (
     <div className="flex flex-col min-h-screen bg-gradient-to-b from-blue-50 to-blue-100">
       <Header />
@@ -33,6 +37,16 @@ const LoginView = () => {
               </h1>
               <p className="text-center text-muted-foreground mb-8">Secure attendance tracking with location verification</p>
               <LoginForm />
+            </div>
+          ) : !currentUser.emailVerified ? (
+            <div className="mt-2 md:mt-8">
+              <h1 className="text-3xl md:text-4xl font-bold mb-2 text-center gradient-text bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-cyan-500">
+                Email Verification Required
+              </h1>
+              <p className="text-center text-muted-foreground mb-8">Please verify your email before continuing</p>
+              <div className="max-w-md mx-auto">
+                <EmailVerification />
+              </div>
             </div>
           ) : (
             <Dashboard />

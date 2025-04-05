@@ -5,6 +5,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { AlertCircle, Mail, RefreshCcw, CheckCircle } from 'lucide-react';
 
 const EmailVerification = () => {
@@ -32,6 +33,8 @@ const EmailVerification = () => {
               title: "Email Verified",
               description: "Your email has been successfully verified.",
             });
+          } else {
+            setIsVerifying(false);
           }
         });
       })
@@ -40,6 +43,13 @@ const EmailVerification = () => {
         setIsVerifying(false);
       });
   }, [currentUser, toast]);
+
+  // Start the verification process automatically if not already running
+  useEffect(() => {
+    if (currentUser && !currentUser.emailVerified && !isTimerRunning && verificationTimer === 0) {
+      startVerification();
+    }
+  }, [currentUser, isTimerRunning, verificationTimer]);
 
   // Start the verification process
   const startVerification = () => {
@@ -90,28 +100,45 @@ const EmailVerification = () => {
   }
 
   return (
-    <div className="bg-yellow-50 border border-yellow-100 rounded-lg p-4 mb-6">
-      <div className="flex items-start">
-        <div className="flex-shrink-0 pt-0.5">
-          {isTimerRunning ? (
-            <RefreshCcw className="h-5 w-5 text-yellow-500 animate-spin" />
-          ) : (
-            <AlertCircle className="h-5 w-5 text-yellow-500" />
-          )}
-        </div>
-        <div className="ml-3 w-full">
-          <h3 className="text-sm font-medium text-yellow-800">Email Verification Required</h3>
-          <div className="mt-2 text-sm text-yellow-700">
-            <p>
-              Your email address needs to be verified before you can access all features.
-              {isTimerRunning && (
-                <span className="block mt-2">
-                  Checking for verification... ({verificationTimer}s remaining)
-                </span>
-              )}
-            </p>
+    <Card className="w-full max-w-md mx-auto shadow-lg">
+      <CardHeader className="text-center">
+        <CardTitle className="text-xl font-bold">Email Verification Required</CardTitle>
+        <CardDescription>
+          We've sent a verification email to your inbox.<br/>
+          Please check your email and click the verification link.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4">
+          <div className="bg-yellow-50 border border-yellow-100 rounded-lg p-4">
+            <div className="flex items-start">
+              <div className="flex-shrink-0 pt-0.5">
+                {isTimerRunning ? (
+                  <RefreshCcw className="h-5 w-5 text-yellow-500 animate-spin" />
+                ) : (
+                  <AlertCircle className="h-5 w-5 text-yellow-500" />
+                )}
+              </div>
+              <div className="ml-3 w-full">
+                <h3 className="text-sm font-medium text-yellow-800">Verification Status</h3>
+                <div className="mt-2 text-sm text-yellow-700">
+                  <p>
+                    {isTimerRunning ? (
+                      <span>
+                        Checking for verification... ({verificationTimer}s remaining)
+                      </span>
+                    ) : (
+                      <span>
+                        Please verify your email to continue.
+                      </span>
+                    )}
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
-          <div className="mt-4 flex justify-between items-center">
+          
+          <div className="flex justify-between items-center">
             <Button
               variant="outline"
               size="sm"
@@ -120,7 +147,7 @@ const EmailVerification = () => {
               disabled={isTimerRunning || isVerifying}
             >
               <Mail className="mr-1 h-4 w-4" />
-              {isTimerRunning ? 'Email Sent' : 'Send Verification Email'}
+              {isTimerRunning ? 'Email Sent' : 'Resend Verification Email'}
             </Button>
             
             <Button
@@ -135,8 +162,8 @@ const EmailVerification = () => {
             </Button>
           </div>
         </div>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 };
 

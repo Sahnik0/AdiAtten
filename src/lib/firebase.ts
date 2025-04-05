@@ -137,13 +137,13 @@ export const getMaxAllowedDistance = async (): Promise<number> => {
     
     if (settingsDoc.exists()) {
       const data = settingsDoc.data();
-      return data.maxDistance || 300; // Default to 300m if not set
+      return data.maxDistance || 100; // Default to 100m if not set (changed from 300m)
     }
     
-    return 300; // Default value
+    return 100; // Default value changed to 100m
   } catch (error) {
     console.error("Error fetching max allowed distance:", error);
-    return 300; // Default value in case of error
+    return 100; // Default value in case of error
   }
 };
 
@@ -211,18 +211,22 @@ service cloud.firestore {
   "rules": {
     ".read": "auth != null",
     "attendancePending": {
-      "$uid": {
+      "$classId": {
+        // Create an index on timestamp for faster, ordered queries
+        ".indexOn": ["timestamp"],
         // Users can only write their own pending attendance
-        ".write": "auth != null && auth.uid == $uid",
+        ".write": "auth != null",
         // Admins can read all, users can only read their own
-        ".read": "auth != null && (auth.uid == $uid || root.child('users').child(auth.uid).child('isAdmin').val() == true)"
+        ".read": "auth != null"
       }
     },
     "attendanceVerified": {
-      "$uid": {
+      "$classId": {
+        // Create an index on timestamp for faster, ordered queries
+        ".indexOn": ["timestamp"],
         // Similar rules for verified attendance
         ".write": "auth != null && (auth.uid == $uid || root.child('users').child(auth.uid).child('isAdmin').val() == true)",
-        ".read": "auth != null && (auth.uid == $uid || root.child('users').child(auth.uid).child('isAdmin').val() == true)"
+        ".read": "auth != null"
       }
     },
     "users": {

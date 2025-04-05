@@ -13,7 +13,7 @@ import { Slider } from '@/components/ui/slider';
 const GeolocationSettings = () => {
   const [centerLatitude, setCenterLatitude] = useState(22.6288); // Default Adamas University coordinates
   const [centerLongitude, setCenterLongitude] = useState(88.4682);
-  const [radiusInMeters, setRadiusInMeters] = useState(500); // Default 500m radius
+  const [radiusInMeters, setRadiusInMeters] = useState(50); // Default 50m radius
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
 
@@ -27,7 +27,10 @@ const GeolocationSettings = () => {
           const data = settingsDoc.data();
           setCenterLatitude(data.centerLatitude);
           setCenterLongitude(data.centerLongitude);
-          setRadiusInMeters(data.radiusInMeters);
+          
+          // Ensure radius is within min and max bounds (10-100m)
+          const radius = Math.min(Math.max(data.radiusInMeters || 50, 10), 100);
+          setRadiusInMeters(radius);
         }
       } catch (error) {
         console.error("Error fetching geolocation settings:", error);
@@ -40,11 +43,16 @@ const GeolocationSettings = () => {
   const handleSaveSettings = async () => {
     setIsSubmitting(true);
     try {
+      // Ensure radius is within allowed range (10-100m) before saving
+      const finalRadius = Math.min(Math.max(radiusInMeters, 10), 100);
+      
       await setDoc(doc(firestore, 'settings', 'geolocation'), {
         centerLatitude: Number(centerLatitude),
         centerLongitude: Number(centerLongitude),
-        radiusInMeters: Number(radiusInMeters),
+        radiusInMeters: Number(finalRadius),
       });
+      
+      setRadiusInMeters(finalRadius);
       
       toast({
         title: "Settings Saved",
@@ -138,19 +146,19 @@ const GeolocationSettings = () => {
           <div className="flex justify-between">
             <Label htmlFor="radiusSlider">Radius: {radiusInMeters} meters</Label>
             <span className="text-xs text-muted-foreground">
-              {radiusInMeters < 1000 ? `${radiusInMeters}m` : `${(radiusInMeters / 1000).toFixed(1)}km`}
+              {radiusInMeters}m
             </span>
           </div>
           <Slider
             id="radiusSlider"
-            min={50}
-            max={2000}
-            step={50}
+            min={10}
+            max={100}
+            step={5}
             value={[radiusInMeters]}
             onValueChange={(value) => setRadiusInMeters(value[0])}
           />
           <p className="text-xs text-muted-foreground mt-1">
-            Students must be within this radius to mark attendance
+            Students must be within this radius to mark attendance (min: 10m, max: 100m)
           </p>
         </div>
 

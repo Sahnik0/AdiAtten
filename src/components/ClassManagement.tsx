@@ -39,7 +39,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AlertCircle, Clock, Plus, RefreshCcw, Users, Lock, Check, X, Search } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
-const ClassManagement: React.FC = () => {
+interface ClassManagementProps {
+  onClassSelect?: (classObj: Class) => void;
+}
+
+const ClassManagement: React.FC<ClassManagementProps> = ({ onClassSelect }) => {
   const { currentUser } = useAuth();
   const { toast } = useToast();
   const [classes, setClasses] = useState<Class[]>([]);
@@ -66,6 +70,16 @@ const ClassManagement: React.FC = () => {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [joinDialogOpen, setJoinDialogOpen] = useState(false);
   const [startAttendanceOpen, setStartAttendanceOpen] = useState(false);
+
+  // Check local storage for previously selected class
+  useEffect(() => {
+    if (currentUser?.isAdmin) {
+      const storedClassId = localStorage.getItem('selectedAdminClassId');
+      if (storedClassId) {
+        setSelectedClassId(storedClassId);
+      }
+    }
+  }, [currentUser]);
 
   // Fetch all classes
   const fetchClasses = async () => {
@@ -116,6 +130,14 @@ const ClassManagement: React.FC = () => {
         });
         
         setClasses(adminClasses);
+        
+        // If there's a selected class ID, fetch and set it
+        if (selectedClassId) {
+          const selectedClass = adminClasses.find(c => c.id === selectedClassId);
+          if (selectedClass) {
+            setSelectedAdminClass(selectedClass);
+          }
+        }
       } else {
         // Students see classes they're enrolled in
         const userEnrolledClasses: Class[] = [];
@@ -235,6 +257,11 @@ const ClassManagement: React.FC = () => {
       if (classData.createdBy === currentUser.uid) {
         setSelectedClassId(classId);
         setSelectedAdminClass(classData as Class);
+        // Call onClassSelect callback
+        if (onClassSelect) {
+          onClassSelect({id: classId, ...classData} as Class);
+        }
+        
         toast({
           title: "Success",
           description: `You now have access to manage ${classData.name}.`,
@@ -246,6 +273,11 @@ const ClassManagement: React.FC = () => {
       if (classData.password === password) {
         setSelectedClassId(classId);
         setSelectedAdminClass(classData as Class);
+        // Call onClassSelect callback
+        if (onClassSelect) {
+          onClassSelect({id: classId, ...classData} as Class);
+        }
+        
         toast({
           title: "Success",
           description: `You now have access to manage ${classData.name}.`,
@@ -342,9 +374,10 @@ const ClassManagement: React.FC = () => {
       }
       
       // Add to pending students
-      const pendingStudents = classData.pendingStudents || [];
       await updateDoc(classRef, {
-        pendingStudents: [...pendingStudents, currentUser.uid]
+        pendingStudents: Array.isArray(classData.pendingStudents) 
+          ? [...classData.pendingStudents, currentUser.uid]
+          : [currentUser.uid]
       });
       
       toast({
@@ -393,11 +426,8 @@ const ClassManagement: React.FC = () => {
       
       const classData = classDoc.data() as Class;
       
-      // Initialize arrays to ensure they exist
-      const pendingStudents = classData.pendingStudents || [];
-      const students = classData.students || [];
-      
       // Remove from pending students
+      const pendingStudents = classData.pendingStudents || [];
       const updatedPendingStudents = pendingStudents.filter(id => id !== studentId);
       
       if (approve) {
@@ -407,6 +437,7 @@ const ClassManagement: React.FC = () => {
         }, { merge: true });
         
         // Add to enrolled students
+        const students = classData.students || [];
         await updateDoc(classRef, {
           students: [...students, studentId],
           pendingStudents: updatedPendingStudents
@@ -555,6 +586,13 @@ const ClassManagement: React.FC = () => {
         description: "Class deleted successfully.",
       });
       
+      // If this was the selected class, clear the selection
+      if (classId === selectedClassId) {
+        setSelectedClassId('');
+        setSelectedAdminClass(null);
+        localStorage.removeItem('selectedAdminClassId');
+      }
+      
       fetchClasses();
     } catch (error) {
       console.error("Error deleting class:", error);
@@ -595,6 +633,10 @@ const ClassManagement: React.FC = () => {
                     // If current user is creator, no need for password
                     if (selectedClass && selectedClass.createdBy === currentUser?.uid) {
                       setSelectedAdminClass(selectedClass);
+                      if (onClassSelect) {
+                        onClassSelect(selectedClass);
+                        localStorage.setItem('selectedAdminClassId', selectedClass.id);
+                      }
                     } else {
                       // Open password dialog
                       setAdminAccessPassword('');
@@ -603,6 +645,7 @@ const ClassManagement: React.FC = () => {
                   } else {
                     setSelectedClassId('');
                     setSelectedAdminClass(null);
+                    localStorage.removeItem('selectedAdminClassId');
                   }
                 }}
               >
@@ -616,6 +659,10 @@ const ClassManagement: React.FC = () => {
               <Button onClick={() => {
                 setSelectedClassId('');
                 setSelectedAdminClass(null);
+                localStorage.removeItem('selectedAdminClassId');
+                if (onClassSelect) {
+                  onClassSelect({} as Class);
+                }
               }}>
                 Clear
               </Button>
@@ -844,10 +891,10 @@ const ClassManagement: React.FC = () => {
                       <div className="mt-4">
                         <h3 className="font-semibold mb-2">
                           <Users className="h-4 w-4 inline mr-1" /> 
-                          Enrolled Students ({cls.students.length})
+                          Enrolled Students ({cls.students?.length || 0})
                         </h3>
                         
-                        {cls.students.length === 0 ? (
+                        {!cls.students || cls.students.length === 0 ? (
                           <p className="text-sm text-muted-foreground">No students enrolled yet.</p>
                         ) : (
                           <div className="text-sm">
@@ -875,7 +922,7 @@ const ClassManagement: React.FC = () => {
                         )}
                       </div>
                       
-                      {cls.pendingStudents.length > 0 && (
+                      {cls.pendingStudents && cls.pendingStudents.length > 0 && (
                         <div className="mt-4 border-t pt-4">
                           <h3 className="font-semibold mb-2">
                             <AlertCircle className="h-4 w-4 inline mr-1" /> 
@@ -1018,49 +1065,45 @@ const ClassManagement: React.FC = () => {
                   const isPending = cls.pendingStudents && cls.pendingStudents.includes(currentUser?.uid || '');
                   
                   return (
-                    <Card key={cls.id} className="overflow-hidden">
-                      <CardHeader className="pb-3">
+                    <Card key={cls.id}>
+                      <CardHeader>
                         <CardTitle>{cls.name}</CardTitle>
-                        <CardDescription>Created by: {cls.creatorEmail}</CardDescription>
+                        <CardDescription>
+                          Instructor: {cls.creatorEmail}
+                        </CardDescription>
                       </CardHeader>
                       <CardContent>
-                        {cls.description && (
-                          <p className="text-sm text-muted-foreground mb-4">{cls.description}</p>
-                        )}
-                        
-                        <div className="flex items-center mt-2">
-                          <Users className="h-4 w-4 mr-1 text-muted-foreground" />
-                          <span className="text-xs text-muted-foreground">
-                            {cls.students ? cls.students.length : 0} students enrolled
-                          </span>
+                        {cls.description && <p className="mb-4">{cls.description}</p>}
+                        <div className="flex items-center text-sm text-muted-foreground">
+                          <Users className="h-4 w-4 mr-1" />
+                          <span>{cls.students?.length || 0} students enrolled</span>
                         </div>
-                        
-                        {cls.isActive && (
-                          <div className="flex items-center mt-2">
-                            <Clock className="h-4 w-4 mr-1 text-green-600" />
-                            <span className="text-xs text-green-600 font-medium">
-                              Attendance session active
-                            </span>
-                          </div>
-                        )}
                       </CardContent>
-                      <CardFooter className="bg-muted/20 border-t flex items-center justify-between">
+                      <CardFooter className="flex justify-between">
                         {isEnrolled ? (
-                          <Badge className="bg-green-100 text-green-800">Enrolled</Badge>
+                          <Badge variant="outline" className="bg-green-50 text-green-700">
+                            Enrolled
+                          </Badge>
                         ) : isPending ? (
-                          <Badge className="bg-yellow-100 text-yellow-800">Pending Approval</Badge>
+                          <Badge variant="outline" className="bg-yellow-50 text-yellow-700">
+                            Pending Approval
+                          </Badge>
                         ) : (
-                          <Button 
-                            variant="outline" 
+                          <Button
                             size="sm"
-                            className="text-sm"
                             onClick={() => {
                               setJoinClassId(cls.id);
                               setJoinDialogOpen(true);
                             }}
                           >
-                            Request to Join
+                            Join Class
                           </Button>
+                        )}
+                        
+                        {cls.isActive && (
+                          <Badge className="bg-green-100 text-green-800">
+                            Active
+                          </Badge>
                         )}
                       </CardFooter>
                     </Card>
@@ -1071,49 +1114,40 @@ const ClassManagement: React.FC = () => {
           </TabsContent>
           
           <TabsContent value="enrolled">
-            {enrolledClasses.length === 0 ? (
+            {loading ? (
+              <div className="flex justify-center py-8">
+                <RefreshCcw className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : enrolledClasses.length === 0 ? (
               <Card>
                 <CardContent className="py-8 text-center">
-                  <p className="text-muted-foreground">You are not enrolled in any classes.</p>
+                  <p className="text-muted-foreground">You are not enrolled in any classes yet.</p>
                 </CardContent>
               </Card>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-4">
                 {enrolledClasses.map((cls) => (
                   <Card key={cls.id}>
                     <CardHeader>
                       <CardTitle>{cls.name}</CardTitle>
-                      <CardDescription>Created by: {cls.creatorEmail}</CardDescription>
+                      <CardDescription>
+                        Instructor: {cls.creatorEmail}
+                      </CardDescription>
                     </CardHeader>
                     <CardContent>
-                      {cls.description && <p className="text-sm text-muted-foreground">{cls.description}</p>}
-                      
-                      {cls.isActive ? (
-                        <div className="mt-4 p-3 bg-green-50 border border-green-100 rounded-md">
-                          <div className="flex items-center">
-                            <Clock className="h-4 w-4 text-green-600 mr-2" />
-                            <span className="text-green-700 font-medium">
-                              Attendance session active!
-                            </span>
-                          </div>
-                          <p className="text-sm text-green-600 mt-1">
-                            You can now mark your attendance.
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="mt-4 p-3 bg-blue-50 border border-blue-100 rounded-md">
-                          <div className="flex items-center">
-                            <AlertCircle className="h-4 w-4 text-blue-600 mr-2" />
-                            <span className="text-blue-700 font-medium">
-                              No active attendance session
-                            </span>
-                          </div>
-                          <p className="text-sm text-blue-600 mt-1">
-                            Wait for your instructor to start an attendance session.
-                          </p>
-                        </div>
-                      )}
+                      {cls.description && <p className="mb-4">{cls.description}</p>}
                     </CardContent>
+                    {cls.isActive && (
+                      <CardFooter className="bg-green-50 border-t border-green-100">
+                        <div className="flex items-center">
+                          <Clock className="h-4 w-4 text-green-600 mr-2" />
+                          <span className="text-green-700">
+                            Attendance session active
+                            {cls.startTime && ` (Started: ${new Date(cls.startTime.toDate()).toLocaleTimeString()})`}
+                          </span>
+                        </div>
+                      </CardFooter>
+                    )}
                   </Card>
                 ))}
               </div>
@@ -1121,34 +1155,31 @@ const ClassManagement: React.FC = () => {
           </TabsContent>
           
           <TabsContent value="pending">
-            {pendingClasses.length === 0 ? (
+            {loading ? (
+              <div className="flex justify-center py-8">
+                <RefreshCcw className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : pendingClasses.length === 0 ? (
               <Card>
                 <CardContent className="py-8 text-center">
                   <p className="text-muted-foreground">You don't have any pending enrollment requests.</p>
                 </CardContent>
               </Card>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-4">
                 {pendingClasses.map((cls) => (
                   <Card key={cls.id}>
                     <CardHeader>
                       <CardTitle>{cls.name}</CardTitle>
-                      <CardDescription>Created by: {cls.creatorEmail}</CardDescription>
+                      <CardDescription>
+                        Instructor: {cls.creatorEmail}
+                      </CardDescription>
                     </CardHeader>
                     <CardContent>
-                      {cls.description && <p className="text-sm text-muted-foreground">{cls.description}</p>}
-                      
-                      <div className="mt-4 p-3 bg-yellow-50 border border-yellow-100 rounded-md">
-                        <div className="flex items-center">
-                          <AlertCircle className="h-4 w-4 text-yellow-600 mr-2" />
-                          <span className="text-yellow-700 font-medium">
-                            Pending Approval
-                          </span>
-                        </div>
-                        <p className="text-sm text-yellow-600 mt-1">
-                          Your request to join this class is awaiting instructor approval.
-                        </p>
-                      </div>
+                      {cls.description && <p className="mb-4">{cls.description}</p>}
+                      <Badge variant="outline" className="bg-yellow-50 text-yellow-700">
+                        Pending Approval
+                      </Badge>
                     </CardContent>
                   </Card>
                 ))}
@@ -1160,8 +1191,11 @@ const ClassManagement: React.FC = () => {
     );
   };
 
-  // Render based on user role
-  return currentUser?.isAdmin ? renderAdminView() : renderStudentView();
+  return (
+    <div>
+      {currentUser?.isAdmin ? renderAdminView() : renderStudentView()}
+    </div>
+  );
 };
 
 export default ClassManagement;

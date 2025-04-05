@@ -1,6 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import AttendanceForm from './AttendanceForm';
+import LiveAttendanceSheet from '../components/LiveAttendanceSheet';
 import { collection, getDocs, query, where, doc, getDoc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { Class } from '@/lib/types';
@@ -8,15 +9,18 @@ import { useAuth } from '@/hooks/useAuth';
 import { Card, CardHeader, CardContent, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { RefreshCcw, Clock, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
-const AttendanceFormWrapper = () => {
+interface AttendanceFormWrapperProps {
+  selectedClass?: Class | null;
+}
+
+const AttendanceFormWrapper: React.FC<AttendanceFormWrapperProps> = ({ selectedClass: propSelectedClass }) => {
   const { currentUser } = useAuth();
   const { toast } = useToast();
   const [activeClasses, setActiveClasses] = useState<Class[]>([]);
   const [availableClasses, setAvailableClasses] = useState<Class[]>([]);
-  const [selectedClassId, setSelectedClassId] = useState<string>('');
   const [selectedClass, setSelectedClass] = useState<Class | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -28,16 +32,27 @@ const AttendanceFormWrapper = () => {
       try {
         setLoading(true);
         
+        // First use the class from props if available
+        if (propSelectedClass) {
+          setSelectedClass(propSelectedClass);
+          setAvailableClasses([propSelectedClass]);
+          setActiveClasses(propSelectedClass.isActive ? [propSelectedClass] : []);
+          setLoading(false);
+          return;
+        }
+        
         let userClasses: Class[] = [];
         
         if (currentUser.isAdmin) {
-          // For admins, fetch all classes or classes they created
-          const classesQuery = query(
-            collection(firestore, 'classes')
-          );
-          
-          const classesSnapshot = await getDocs(classesQuery);
-          userClasses = classesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Class));
+          // For admins, only show classes they selected in the dashboard
+          if (localStorage.getItem('selectedAdminClassId')) {
+            const classId = localStorage.getItem('selectedAdminClassId');
+            const classDoc = await getDoc(doc(firestore, 'classes', classId || ''));
+            
+            if (classDoc.exists()) {
+              userClasses = [{ id: classDoc.id, ...classDoc.data() } as Class];
+            }
+          }
         } else {
           // For students, only show classes they're enrolled in
           const enrolledQuery = query(
@@ -55,10 +70,15 @@ const AttendanceFormWrapper = () => {
         const active = userClasses.filter(cls => cls.isActive);
         setActiveClasses(active);
         
-        // If there's an active class and no selection yet, select it automatically
-        if (active.length > 0 && !selectedClassId) {
-          setSelectedClassId(active[0].id);
+        // For students, automatically select their enrolled class
+        if (!currentUser.isAdmin && userClasses.length > 0) {
+          setSelectedClass(userClasses[0]);
+        } 
+        // For admins, select the active class from their selected class
+        else if (currentUser.isAdmin && active.length > 0) {
           setSelectedClass(active[0]);
+        } else if (userClasses.length > 0) {
+          setSelectedClass(userClasses[0]);
         }
         
       } catch (error) {
@@ -74,22 +94,7 @@ const AttendanceFormWrapper = () => {
     };
     
     fetchClasses();
-    
-    // Poll every 30 seconds for active classes
-    const interval = setInterval(fetchClasses, 30000);
-    
-    return () => clearInterval(interval);
-  }, [currentUser]);
-
-  // Update selected class when selectedClassId changes
-  useEffect(() => {
-    if (selectedClassId) {
-      const classObj = availableClasses.find(c => c.id === selectedClassId) || null;
-      setSelectedClass(classObj);
-    } else {
-      setSelectedClass(null);
-    }
-  }, [selectedClassId, availableClasses]);
+  }, [currentUser, propSelectedClass]);
 
   const handleRefresh = () => {
     setLoading(true);
@@ -137,6 +142,33 @@ const AttendanceFormWrapper = () => {
     );
   }
 
+  if (!selectedClass) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>No Class Selected</CardTitle>
+          <CardDescription>
+            {currentUser?.isAdmin 
+              ? "Please select a class from the Class Management tab first."
+              : "Please join a class to mark attendance."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="text-muted-foreground">
+            {currentUser?.isAdmin
+              ? "You need to select a class to view its attendance."
+              : "You need to enroll in a class to mark attendance."}
+          </p>
+        </CardContent>
+        <CardFooter>
+          <Button onClick={handleRefresh} variant="outline" className="w-full">
+            <RefreshCcw className="mr-2 h-4 w-4" /> Refresh
+          </Button>
+        </CardFooter>
+      </Card>
+    );
+  }
+
   // If no active classes
   if (activeClasses.length === 0) {
     return (
@@ -155,17 +187,15 @@ const AttendanceFormWrapper = () => {
                 : "Wait for your instructor to start an attendance session."}
             </p>
             
-            {availableClasses.length > 0 && (
+            {availableClasses.length > 0 && selectedClass && (
               <div className="bg-blue-50 border border-blue-100 p-4 rounded-md">
                 <div className="flex">
                   <AlertCircle className="text-blue-500 h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
                   <div>
-                    <p className="text-blue-700 font-medium">Your Available Classes</p>
-                    <ul className="text-sm text-blue-600 mt-2 list-disc pl-5">
-                      {availableClasses.map(cls => (
-                        <li key={cls.id}>{cls.name}</li>
-                      ))}
-                    </ul>
+                    <p className="text-blue-700 font-medium">Your Selected Class</p>
+                    <p className="text-sm text-blue-600 mt-2">
+                      {selectedClass.name}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -185,29 +215,15 @@ const AttendanceFormWrapper = () => {
     <div>
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle>Select Class</CardTitle>
+          <CardTitle>Attendance for {selectedClass?.name || 'Your Class'}</CardTitle>
           <CardDescription>
-            Choose a class to mark attendance
+            {selectedClass?.isActive 
+              ? "Attendance session is active"
+              : "No active attendance session"}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            <Select
-              value={selectedClassId}
-              onValueChange={setSelectedClassId}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select a class" />
-              </SelectTrigger>
-              <SelectContent>
-                {availableClasses.map(cls => (
-                  <SelectItem key={cls.id} value={cls.id}>
-                    {cls.name} {cls.isActive ? ' (Active)' : ''}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            
             {selectedClass && selectedClass.isActive && (
               <div className="bg-green-50 border border-green-100 p-4 rounded-md">
                 <div className="flex">
@@ -230,12 +246,25 @@ const AttendanceFormWrapper = () => {
         </CardContent>
         <CardFooter>
           <Button onClick={handleRefresh} variant="outline" className="w-full">
-            <RefreshCcw className="mr-2 h-4 w-4" /> Refresh Classes
+            <RefreshCcw className="mr-2 h-4 w-4" /> Refresh
           </Button>
         </CardFooter>
       </Card>
       
-      <AttendanceForm selectedClass={selectedClass} />
+      <Tabs defaultValue="mark-attendance" className="mb-6">
+        <TabsList className="w-full">
+          <TabsTrigger value="mark-attendance" className="flex-1">Mark Attendance</TabsTrigger>
+          <TabsTrigger value="live-attendance" className="flex-1">Live Attendance</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="mark-attendance">
+          <AttendanceForm selectedClass={selectedClass} />
+        </TabsContent>
+        
+        <TabsContent value="live-attendance">
+          <LiveAttendanceSheet classId={selectedClass?.id || ''} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

@@ -12,7 +12,11 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { MapPin, AlertTriangle, Check, Clock } from 'lucide-react';
 import { Class } from '@/lib/types';
 
-const AttendanceForm = () => {
+interface AttendanceFormProps {
+  selectedClass: Class | null;
+}
+
+const AttendanceForm = ({ selectedClass }: AttendanceFormProps) => {
   const { currentUser } = useAuth();
   const { toast } = useToast();
   const { 
@@ -25,7 +29,6 @@ const AttendanceForm = () => {
     maxAllowedDistance 
   } = useGeolocation();
   
-  const [selectedClass, setSelectedClass] = useState<Class | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [attendanceMarked, setAttendanceMarked] = useState(false);
 
@@ -115,7 +118,7 @@ const AttendanceForm = () => {
       });
 
       // Add to Realtime Database pending attendance
-      await set(ref(database, `attendancePending/${currentUser.uid}`), {
+      await set(ref(database, `attendancePending/${selectedClass.id}/${currentUser.uid}`), {
         email: currentUser.email,
         name: currentUser.displayName || currentUser.email?.split('@')[0],
         rollNumber: currentUser.rollNumber || '',
@@ -226,7 +229,7 @@ const AttendanceForm = () => {
             <AlertTriangle className="h-4 w-4" />
             <AlertTitle>No Active Class Selected</AlertTitle>
             <AlertDescription>
-              Please select an active class from the Attendance wrapper.
+              Please select an active class to mark attendance.
             </AlertDescription>
           </Alert>
         )}
