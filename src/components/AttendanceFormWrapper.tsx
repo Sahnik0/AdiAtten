@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import AttendanceForm from './AttendanceForm';
-import LiveAttendanceSheet from '../components/LiveAttendanceSheet';
+import LiveAttendanceSheet from './LiveAttendanceSheet';
 import { collection, getDocs, query, where, doc, getDoc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { Class } from '@/lib/types';
@@ -64,21 +64,38 @@ const AttendanceFormWrapper: React.FC<AttendanceFormWrapperProps> = ({ selectedC
           userClasses = enrolledSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Class));
         }
         
-        setAvailableClasses(userClasses);
+        // Make sure we check the active status of each class
+        const updatedClasses = await Promise.all(
+          userClasses.map(async (cls) => {
+            if (cls.id) {
+              const latestClassDoc = await getDoc(doc(firestore, 'classes', cls.id));
+              if (latestClassDoc.exists()) {
+                return { ...cls, ...latestClassDoc.data() } as Class;
+              }
+            }
+            return cls;
+          })
+        );
+        
+        setAvailableClasses(updatedClasses);
         
         // Filter active classes
-        const active = userClasses.filter(cls => cls.isActive);
+        const active = updatedClasses.filter(cls => cls.isActive);
         setActiveClasses(active);
         
-        // For students, automatically select their enrolled class
-        if (!currentUser.isAdmin && userClasses.length > 0) {
-          setSelectedClass(userClasses[0]);
+        // For students, automatically select their enrolled class if it's active
+        if (!currentUser.isAdmin) {
+          if (active.length > 0) {
+            setSelectedClass(active[0]);
+          } else if (updatedClasses.length > 0) {
+            setSelectedClass(updatedClasses[0]);
+          }
         } 
         // For admins, select the active class from their selected class
         else if (currentUser.isAdmin && active.length > 0) {
           setSelectedClass(active[0]);
-        } else if (userClasses.length > 0) {
-          setSelectedClass(userClasses[0]);
+        } else if (updatedClasses.length > 0) {
+          setSelectedClass(updatedClasses[0]);
         }
         
       } catch (error) {
@@ -94,6 +111,11 @@ const AttendanceFormWrapper: React.FC<AttendanceFormWrapperProps> = ({ selectedC
     };
     
     fetchClasses();
+    
+    // Set up a refresh interval to check for active classes
+    const intervalId = setInterval(fetchClasses, 30000); // 30 seconds
+    
+    return () => clearInterval(intervalId);
   }, [currentUser, propSelectedClass]);
 
   const handleRefresh = () => {
@@ -169,8 +191,8 @@ const AttendanceFormWrapper: React.FC<AttendanceFormWrapperProps> = ({ selectedC
     );
   }
 
-  // If no active classes
-  if (activeClasses.length === 0) {
+  // If no active classes for students
+  if (!currentUser?.isAdmin && activeClasses.length === 0) {
     return (
       <Card>
         <CardHeader>
@@ -182,9 +204,7 @@ const AttendanceFormWrapper: React.FC<AttendanceFormWrapperProps> = ({ selectedC
         <CardContent>
           <div className="space-y-4">
             <p className="text-muted-foreground">
-              {currentUser?.isAdmin 
-                ? "Start an attendance session from the Class Management tab."
-                : "Wait for your instructor to start an attendance session."}
+              Wait for your instructor to start an attendance session.
             </p>
             
             {availableClasses.length > 0 && selectedClass && (
@@ -237,6 +257,24 @@ const AttendanceFormWrapper: React.FC<AttendanceFormWrapperProps> = ({ selectedC
                         `Started at ${new Date(selectedClass.startTime.toDate()).toLocaleTimeString()}`}
                       {selectedClass.endTime && 
                         ` • Ends at ${new Date(selectedClass.endTime.toDate()).toLocaleTimeString()}`}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {selectedClass && !selectedClass.isActive && (
+              <div className="bg-gray-50 border border-gray-200 p-4 rounded-md">
+                <div className="flex">
+                  <Clock className="text-gray-500 h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-gray-700 font-medium">
+                      No Active Attendance Session
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      {currentUser?.isAdmin 
+                        ? "Start an attendance session from the Class Management tab."
+                        : "Wait for your instructor to start an attendance session."}
                     </p>
                   </div>
                 </div>

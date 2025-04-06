@@ -1,9 +1,10 @@
 
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore, doc, getDoc } from "firebase/firestore";
+import { getFirestore, doc, getDoc, DocumentData, DocumentReference } from "firebase/firestore";
 import { getDatabase } from "firebase/database";
 import { collection, query, getDocs, where } from "firebase/firestore";
+import { updateDoc as firestoreUpdateDoc, Timestamp } from 'firebase/firestore';
 
 // Firebase configuration
 const firebaseConfig = {
@@ -34,6 +35,37 @@ export const isValidDomain = (email: string): boolean => {
 // Helper function to check if user is admin
 export const isAdminEmail = (email: string): boolean => {
   return email.endsWith('@adamasuniversity.ac.in');
+};
+
+// Helper function to update a class and handle session IDs
+export const updateClassAttendanceSession = async (classId: string, isActive: boolean): Promise<boolean> => {
+  try {
+    const classRef = doc(firestore, 'classes', classId);
+    const now = new Date();
+    const sessionId = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}`;
+    
+    if (isActive) {
+      // Starting a session
+      await updateDoc(classRef, {
+        isActive: true,
+        startTime: Timestamp.now(),
+        currentSessionId: sessionId
+      });
+    } else {
+      // Ending a session
+      await updateDoc(classRef, {
+        isActive: false,
+        endTime: Timestamp.now(),
+        lastSessionId: sessionId,
+        currentSessionId: null
+      });
+    }
+    
+    return true;
+  } catch (error) {
+    console.error("Error updating class attendance session:", error);
+    return false;
+  }
 };
 
 // Helper function to check if a student is enrolled in a specific class
@@ -137,19 +169,38 @@ export const getMaxAllowedDistance = async (): Promise<number> => {
     
     if (settingsDoc.exists()) {
       const data = settingsDoc.data();
-      return data.maxDistance || 100; // Default to 100m if not set (changed from 300m)
+      // Support both old and new field names
+      return data.maxDistance || data.radiusInMeters || 100; // Default to 100m if not set
     }
     
-    return 100; // Default value changed to 100m
+    return 100; // Default value is 100m
   } catch (error) {
     console.error("Error fetching max allowed distance:", error);
     return 100; // Default value in case of error
   }
 };
 
+// Helper function to reset a user's device ID
+export const resetUserDeviceId = async (userId: string): Promise<boolean> => {
+  try {
+    const userRef = doc(firestore, 'users', userId);
+    const userDoc = await getDoc(userRef);
+    
+    if (!userDoc.exists()) return false;
+    
+    await updateDoc(userRef, {
+      deviceId: null
+    });
+    
+    return true;
+  } catch (error) {
+    console.error("Error resetting user device ID:", error);
+    return false;
+  }
+};
+
 /*
 Firebase Security Configuration Guide:
-
 1. Firestore Rules:
 ```
 rules_version = '2';
@@ -270,3 +321,8 @@ service cloud.firestore {
 */
 
 export default app;
+
+
+function updateDoc(classRef: DocumentReference<DocumentData>, arg1: { isActive: boolean; endTime?: Timestamp; startTime?: Timestamp; lastSessionId?: string; currentSessionId?: string | null; }) {
+  return firestoreUpdateDoc(classRef, arg1);
+}

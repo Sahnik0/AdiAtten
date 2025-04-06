@@ -3,11 +3,12 @@ import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { LogIn, UserPlus, Mail } from 'lucide-react';
+import { LogIn, UserPlus, Mail, KeyRound } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Label } from '@/components/ui/label';
+import ForgotPassword from '../components/ForgotPassword.tsx';
 
 const LoginForm = () => {
   const { signIn, register, sendVerificationEmail, currentUser } = useAuth();
@@ -16,6 +17,7 @@ const LoginForm = () => {
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [rollNumber, setRollNumber] = useState('');
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,6 +38,10 @@ const LoginForm = () => {
     await sendVerificationEmail();
     setIsLoading(false);
   };
+
+  if (showForgotPassword) {
+    return <ForgotPassword onBack={() => setShowForgotPassword(false)} />;
+  }
 
   return (
     <Card className="w-full max-w-md mx-auto shadow-lg">
@@ -85,7 +91,17 @@ const LoginForm = () => {
               </div>
               
               <div className="grid gap-2">
-                <Label htmlFor="password">Password</Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="password">Password</Label>
+                  <Button 
+                    variant="link" 
+                    className="px-0 font-normal h-auto text-xs"
+                    onClick={() => setShowForgotPassword(true)}
+                    type="button"
+                  >
+                    Forgot password?
+                  </Button>
+                </div>
                 <Input 
                   id="password"
                   type="password" 
@@ -202,7 +218,7 @@ const LoginForm = () => {
 
         <div className="flex flex-col items-center justify-center space-y-2 mt-4">
           <div className="rounded-full bg-blue-100 p-3">
-            <Mail className="h-6 w-6 text-blue-600" />
+            <KeyRound className="h-6 w-6 text-blue-600" />
           </div>
           
           <p className="text-center text-muted-foreground text-sm">

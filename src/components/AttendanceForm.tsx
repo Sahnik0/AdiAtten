@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { collection, getDocs, query, where, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, set } from 'firebase/database';
@@ -36,19 +37,24 @@ const AttendanceForm = ({ selectedClass }: AttendanceFormProps) => {
       if (!currentUser || !selectedClass) return;
       
       try {
-        const today = new Date().toISOString().split('T')[0];
-        const attendanceId = `${currentUser.uid}_${today}_${selectedClass.id}`;
+        // Check if the class has an active attendance session
+        if (!selectedClass.isActive) {
+          setAttendanceMarked(false);
+          return;
+        }
         
-        const attendanceRef = doc(firestore, 'attendance', attendanceId);
-        const attendanceDoc = await getDoc(attendanceRef);
+        // Check if this student already marked attendance for the current session
+        const attendanceRef = ref(database, `attendancePending/${selectedClass.id}/${currentUser.uid}`);
+        const pendingSnapshot = await getDoc(doc(firestore, 'attendance', `${currentUser.uid}_${selectedClass.id}_${selectedClass.currentSessionId || 'latest'}`));
         
-        if (attendanceDoc.exists()) {
+        if (pendingSnapshot.exists()) {
           setAttendanceMarked(true);
         } else {
           setAttendanceMarked(false);
         }
       } catch (error) {
         console.error("Error checking attendance status:", error);
+        setAttendanceMarked(false);
       }
     };
     
@@ -69,6 +75,15 @@ const AttendanceForm = ({ selectedClass }: AttendanceFormProps) => {
       toast({
         title: "Error",
         description: "Please select an active class to mark attendance.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!selectedClass.isActive) {
+      toast({
+        title: "Error",
+        description: "There is no active attendance session for this class.",
         variant: "destructive",
       });
       return;
@@ -96,8 +111,10 @@ const AttendanceForm = ({ selectedClass }: AttendanceFormProps) => {
 
     try {
       const today = new Date().toISOString().split('T')[0];
-      const attendanceId = `${currentUser.uid}_${today}_${selectedClass.id}`;
+      const sessionId = selectedClass.currentSessionId || today;
+      const attendanceId = `${currentUser.uid}_${selectedClass.id}_${sessionId}`;
 
+      // Store in Firestore for permanent record
       await setDoc(doc(firestore, 'attendance', attendanceId), {
         userId: currentUser.uid,
         userEmail: currentUser.email,
@@ -105,28 +122,31 @@ const AttendanceForm = ({ selectedClass }: AttendanceFormProps) => {
         rollNumber: currentUser.rollNumber || '',
         timestamp: serverTimestamp(),
         date: today,
-        verified: false,
+        verified: true, // Automatically mark as present if successful
         location: {
           latitude: currentLocation.latitude,
           longitude: currentLocation.longitude,
           accuracy: currentLocation.accuracy
         },
-        classId: selectedClass.id
+        classId: selectedClass.id,
+        sessionId: sessionId
       });
 
+      // Store in Realtime Database for live updates
       await set(ref(database, `attendancePending/${selectedClass.id}/${currentUser.uid}`), {
         email: currentUser.email,
         name: currentUser.displayName || currentUser.email?.split('@')[0],
         rollNumber: currentUser.rollNumber || '',
         timestamp: Date.now(),
         date: today,
-        classId: selectedClass.id
+        classId: selectedClass.id,
+        sessionId: sessionId
       });
 
       setAttendanceMarked(true);
       toast({
         title: "Success",
-        description: "Your attendance has been submitted for verification.",
+        description: "Your attendance has been marked successfully.",
       });
     } catch (error) {
       console.error("Error marking attendance:", error);
@@ -147,8 +167,16 @@ const AttendanceForm = ({ selectedClass }: AttendanceFormProps) => {
           <CardTitle className="text-green-600 flex items-center">
             <Check className="mr-2" /> Attendance Submitted
           </CardTitle>
-          <CardDescription>Your attendance has been submitted and is pending verification by admin.</CardDescription>
+          <CardDescription>Your attendance has been recorded successfully for this session.</CardDescription>
         </CardHeader>
+        <CardContent>
+          <div className="bg-green-50 border border-green-100 p-4 rounded-md">
+            <p className="text-green-800">
+              You've marked your attendance for today's session of {selectedClass?.name}. 
+              You don't need to mark attendance again for this session.
+            </p>
+          </div>
+        </CardContent>
       </Card>
     );
   }
@@ -194,19 +222,36 @@ const AttendanceForm = ({ selectedClass }: AttendanceFormProps) => {
         </div>
 
         {selectedClass ? (
-          <div className="bg-blue-50 border border-blue-100 p-4 rounded-md">
+          <div className={`p-4 rounded-md ${
+            selectedClass.isActive 
+              ? 'bg-blue-50 border border-blue-100' 
+              : 'bg-gray-50 border border-gray-100'
+          }`}>
             <div className="flex">
-              <Clock className="text-blue-500 h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
+              <Clock className={`h-5 w-5 mr-2 flex-shrink-0 mt-0.5 ${
+                selectedClass.isActive ? 'text-blue-500' : 'text-gray-500'
+              }`} />
               <div>
-                <p className="text-blue-700 font-medium">
-                  Active Attendance: {selectedClass.name}
+                <p className={`font-medium ${
+                  selectedClass.isActive ? 'text-blue-700' : 'text-gray-700'
+                }`}>
+                  {selectedClass.isActive 
+                    ? `Active Attendance: ${selectedClass.name}` 
+                    : `No Active Attendance for ${selectedClass.name}`}
                 </p>
-                <p className="text-sm text-blue-600">
-                  {selectedClass.startTime && 
-                    `Started at ${new Date(selectedClass.startTime.toDate()).toLocaleTimeString()}`}
-                  {selectedClass.endTime && 
-                    ` • Ends at ${new Date(selectedClass.endTime.toDate()).toLocaleTimeString()}`}
-                </p>
+                {selectedClass.isActive && (
+                  <p className="text-sm text-blue-600">
+                    {selectedClass.startTime && 
+                      `Started at ${new Date(selectedClass.startTime.toDate()).toLocaleTimeString()}`}
+                    {selectedClass.endTime && 
+                      ` • Ends at ${new Date(selectedClass.endTime.toDate()).toLocaleTimeString()}`}
+                  </p>
+                )}
+                {!selectedClass.isActive && (
+                  <p className="text-sm text-gray-600">
+                    Wait for your instructor to start an attendance session.
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -227,7 +272,9 @@ const AttendanceForm = ({ selectedClass }: AttendanceFormProps) => {
             submitting || 
             locationLoading || 
             !isWithinCampus || 
-            !selectedClass
+            !selectedClass ||
+            !selectedClass.isActive ||
+            attendanceMarked
           }
           className="w-full"
         >

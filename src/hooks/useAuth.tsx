@@ -1,4 +1,3 @@
-
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { 
   createUserWithEmailAndPassword,
@@ -6,6 +5,7 @@ import {
   signOut as firebaseSignOut, 
   onAuthStateChanged, 
   sendEmailVerification,
+  sendPasswordResetEmail,
   User as FirebaseUser
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, collection, getDocs } from 'firebase/firestore';
@@ -26,6 +26,7 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   sendVerificationEmail: () => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
   isDeviceVerified: boolean;
   deviceVerificationLoading: boolean;
 }
@@ -42,7 +43,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        // Check if email is verified
         if (!user.emailVerified) {
           toast({
             title: "Email Not Verified",
@@ -51,11 +51,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           });
         }
 
-        // Extend the user object with isAdmin property
         const authUser = user as unknown as AuthUser;
-        authUser.isAdmin = false; // Default to false
+        authUser.isAdmin = false;
 
-        // Get additional user data from Firestore
         try {
           const userDoc = await getDoc(doc(firestore, 'users', user.uid));
           if (userDoc.exists()) {
@@ -70,7 +68,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         setCurrentUser(authUser);
         
-        // Verify device
         await verifyDevice(user);
       } else {
         setCurrentUser(null);
@@ -94,13 +91,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (userDoc.exists()) {
         const userData = userDoc.data();
         
-        // If user has a registered device ID
         if (userData.deviceId) {
-          // Check if it matches the current device
           setIsDeviceVerified(userData.deviceId === deviceId);
           
           if (userData.deviceId !== deviceId) {
-            // Device mismatch - sign out if not admin
             if (!isAdminEmail(user.email || '')) {
               toast({
                 title: "Device Verification Failed",
@@ -111,7 +105,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
           }
         } else {
-          // First login, register this device
           await setDoc(userRef, { 
             deviceId,
             isAdmin: isAdminEmail(user.email || ''),
@@ -119,7 +112,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setIsDeviceVerified(true);
         }
       } else {
-        // Create user document with device ID
         await setDoc(userRef, {
           deviceId,
           email: user.email,
@@ -143,21 +135,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const register = async (email: string, password: string, displayName?: string, rollNumber?: string) => {
-    try {
-      // Check if email domain is valid
-      if (!isValidDomain(email)) {
-        toast({
-          title: "Invalid Email Domain",
-          description: "Please use your university email to sign up.",
-          variant: "destructive",
-        });
-        return;
-      }
+    if (!email) {
+      toast({
+        title: "Email Required",
+        description: "Please enter your email address to register.",
+        variant: "destructive",
+      });
+      return;
+    }
 
+    if (!isValidDomain(email)) {
+      toast({
+        title: "Invalid Email Domain",
+        description: "Please use your university email to register.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
       const result = await createUserWithEmailAndPassword(auth, email, password);
       const user = result.user;
       
-      // Save additional user information to Firestore
       const userRef = doc(firestore, 'users', user.uid);
       await setDoc(userRef, {
         email: user.email,
@@ -167,7 +166,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         createdAt: new Date(),
       }, { merge: true });
       
-      // Send verification email
       await sendEmailVerification(user);
       toast({
         title: "Verification Email Sent",
@@ -183,20 +181,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signIn = async (email: string, password: string) => {
-    try {
-      // Check if email domain is valid
-      if (!isValidDomain(email)) {
-        toast({
-          title: "Invalid Email Domain",
-          description: "Please use your university email to sign in.",
-          variant: "destructive",
-        });
-        return;
-      }
+    if (!email) {
+      toast({
+        title: "Email Required",
+        description: "Please enter your email address to sign in.",
+        variant: "destructive",
+      });
+      return;
+    }
 
+    if (!isValidDomain(email)) {
+      toast({
+        title: "Invalid Email Domain",
+        description: "Please use your university email to sign in.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
       await signInWithEmailAndPassword(auth, email, password);
-      
-      // Email verification check is handled in the onAuthStateChanged listener
     } catch (error: any) {
       toast({
         title: "Sign In Failed",
@@ -240,6 +244,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const resetPassword = async (email: string) => {
+    if (!email) {
+      toast({
+        title: "Email Required",
+        description: "Please enter your email address to reset your password.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!isValidDomain(email)) {
+      toast({
+        title: "Invalid Email Domain",
+        description: "Please use your university email to reset your password.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      await sendPasswordResetEmail(auth, email);
+      toast({
+        title: "Password Reset Email Sent",
+        description: "Check your inbox for instructions to reset your password.",
+      });
+    } catch (error: any) {
+      let errorMessage = "Failed to send password reset email.";
+      
+      if (error.code === 'auth/user-not-found') {
+        errorMessage = "No account found with this email address.";
+      } else if (error.code === 'auth/invalid-email') {
+        errorMessage = "The email address is not valid.";
+      } else if (error.code === 'auth/too-many-requests') {
+        errorMessage = "Too many attempts. Please try again later.";
+      }
+      
+      toast({
+        title: "Password Reset Failed",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -249,6 +297,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         signIn,
         signOut,
         sendVerificationEmail,
+        resetPassword,
         isDeviceVerified,
         deviceVerificationLoading,
       }}
