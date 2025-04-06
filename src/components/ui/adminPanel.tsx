@@ -1,11 +1,12 @@
+
 import React from 'react';
-import { Class as ClassType } from '@/lib/types';
+import { Class } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import LiveAttendanceSheet from '@/components/LiveAttendanceSheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/hooks/useAuth';
 import UserReports from '@/components/UserReports';
-import { collection, getDocs, query, where, doc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, query, where, doc, updateDoc, setDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { firestore, database } from '@/lib/firebase';
 import { useState, useEffect } from 'react';
 import { AttendanceRecord } from '@/lib/types';
@@ -15,12 +16,8 @@ import { useToast } from '@/hooks/use-toast';
 import GeolocationSettings from '@/components/GeolocationSettings';
 import { ref, remove, get } from 'firebase/database';
 
-export interface ExtendedClass extends ClassType {
-  currentSessionId?: string;
-}
-
 interface AdminPanelProps {
-  selectedClass: ExtendedClass;
+  selectedClass: Class;
 }
 
 const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
@@ -82,8 +79,17 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
     
     setEndingSession(true);
     try {
+      // Get most up-to-date class data
+      const classRef = doc(firestore, 'classes', selectedClass.id);
+      const classDoc = await getDoc(classRef);
+      if (!classDoc.exists()) {
+        throw new Error("Class not found");
+      }
+      
+      const classData = classDoc.data() as Class;
+      
       // Get current session ID
-      const sessionId = selectedClass.currentSessionId || new Date().toISOString().split('T')[0];
+      const sessionId = classData.currentSessionId || new Date().toISOString().split('T')[0];
       
       // Get the pending attendance data
       const pendingRef = ref(database, `attendancePending/${selectedClass.id}`);
@@ -95,10 +101,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
         collection(firestore, 'users'),
         where('classes', 'array-contains', selectedClass.id)
       );
-      
-      // If the above query doesn't work, try this alternative:
-      // const classDoc = await getDoc(doc(firestore, 'classes', selectedClass.id));
-      // const enrolledStudents = classDoc.data()?.students || [];
       
       const enrolledSnapshot = await getDocs(enrolledQuery);
       const enrolledStudents: any[] = [];
@@ -134,7 +136,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
       }
       
       // Update class to inactive
-      const classRef = doc(firestore, 'classes', selectedClass.id);
       await updateDoc(classRef, {
         isActive: false,
         endTime: serverTimestamp(),

@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import AttendanceForm from './AttendanceForm';
 import LiveAttendanceSheet from './LiveAttendanceSheet';
 import { collection, getDocs, query, where, doc, getDoc } from 'firebase/firestore';
@@ -24,106 +24,121 @@ const AttendanceFormWrapper: React.FC<AttendanceFormWrapperProps> = ({ selectedC
   const [selectedClass, setSelectedClass] = useState<Class | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Fetch the most current class data
+  const fetchCurrentClassData = useCallback(async (classId: string): Promise<Class | null> => {
+    try {
+      const classDoc = await getDoc(doc(firestore, 'classes', classId));
+      if (classDoc.exists()) {
+        return { id: classDoc.id, ...classDoc.data() } as Class;
+      }
+      return null;
+    } catch (error) {
+      console.error("Error fetching class data:", error);
+      return null;
+    }
+  }, []);
+
   // Fetch available classes and active classes for the current user
-  useEffect(() => {
+  const fetchClasses = useCallback(async () => {
     if (!currentUser) return;
     
-    const fetchClasses = async () => {
-      try {
-        setLoading(true);
-        
-        // First use the class from props if available
-        if (propSelectedClass) {
+    try {
+      setLoading(true);
+      
+      // First use the class from props if available
+      if (propSelectedClass) {
+        // Always get the most current data
+        const currentClassData = await fetchCurrentClassData(propSelectedClass.id);
+        if (currentClassData) {
+          setSelectedClass(currentClassData);
+          setAvailableClasses([currentClassData]);
+          setActiveClasses(currentClassData.isActive ? [currentClassData] : []);
+        } else {
           setSelectedClass(propSelectedClass);
           setAvailableClasses([propSelectedClass]);
           setActiveClasses(propSelectedClass.isActive ? [propSelectedClass] : []);
-          setLoading(false);
-          return;
         }
-        
-        let userClasses: Class[] = [];
-        
-        if (currentUser.isAdmin) {
-          // For admins, only show classes they selected in the dashboard
-          if (localStorage.getItem('selectedAdminClassId')) {
-            const classId = localStorage.getItem('selectedAdminClassId');
-            const classDoc = await getDoc(doc(firestore, 'classes', classId || ''));
-            
-            if (classDoc.exists()) {
-              userClasses = [{ id: classDoc.id, ...classDoc.data() } as Class];
-            }
-          }
-        } else {
-          // For students, only show classes they're enrolled in
-          const enrolledQuery = query(
-            collection(firestore, 'classes'),
-            where('students', 'array-contains', currentUser.uid)
-          );
+        setLoading(false);
+        return;
+      }
+      
+      let userClasses: Class[] = [];
+      
+      if (currentUser.isAdmin) {
+        // For admins, only show classes they selected in the dashboard
+        if (localStorage.getItem('selectedAdminClassId')) {
+          const classId = localStorage.getItem('selectedAdminClassId');
+          const currentClassData = await fetchCurrentClassData(classId || '');
           
-          const enrolledSnapshot = await getDocs(enrolledQuery);
-          userClasses = enrolledSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Class));
+          if (currentClassData) {
+            userClasses = [currentClassData];
+          }
         }
-        
-        // Make sure we check the active status of each class
-        const updatedClasses = await Promise.all(
-          userClasses.map(async (cls) => {
-            if (cls.id) {
-              const latestClassDoc = await getDoc(doc(firestore, 'classes', cls.id));
-              if (latestClassDoc.exists()) {
-                return { ...cls, ...latestClassDoc.data() } as Class;
-              }
-            }
-            return cls;
-          })
+      } else {
+        // For students, only show classes they're enrolled in
+        const enrolledQuery = query(
+          collection(firestore, 'classes'),
+          where('students', 'array-contains', currentUser.uid)
         );
         
-        setAvailableClasses(updatedClasses);
+        const enrolledSnapshot = await getDocs(enrolledQuery);
         
-        // Filter active classes
-        const active = updatedClasses.filter(cls => cls.isActive);
-        setActiveClasses(active);
-        
-        // For students, automatically select their enrolled class if it's active
-        if (!currentUser.isAdmin) {
-          if (active.length > 0) {
-            setSelectedClass(active[0]);
-          } else if (updatedClasses.length > 0) {
-            setSelectedClass(updatedClasses[0]);
-          }
-        } 
-        // For admins, select the active class from their selected class
-        else if (currentUser.isAdmin && active.length > 0) {
-          setSelectedClass(active[0]);
-        } else if (updatedClasses.length > 0) {
-          setSelectedClass(updatedClasses[0]);
-        }
-        
-      } catch (error) {
-        console.error("Error fetching classes:", error);
-        toast({
-          title: "Error",
-          description: "Failed to fetch classes.",
-          variant: "destructive",
+        // Get the latest data for each class
+        const classPromises = enrolledSnapshot.docs.map(async (doc) => {
+          const currentClass = await fetchCurrentClassData(doc.id);
+          return currentClass;
         });
-      } finally {
-        setLoading(false);
+        
+        const classes = await Promise.all(classPromises);
+        userClasses = classes.filter(Boolean) as Class[];
       }
-    };
-    
+      
+      setAvailableClasses(userClasses);
+      
+      // Filter active classes
+      const active = userClasses.filter(cls => cls.isActive);
+      setActiveClasses(active);
+      
+      // For students, automatically select their enrolled class if it's active
+      if (!currentUser.isAdmin) {
+        if (active.length > 0) {
+          setSelectedClass(active[0]);
+        } else if (userClasses.length > 0) {
+          setSelectedClass(userClasses[0]);
+        }
+      } 
+      // For admins, select the active class from their selected class
+      else if (currentUser.isAdmin && active.length > 0) {
+        setSelectedClass(active[0]);
+      } else if (userClasses.length > 0) {
+        setSelectedClass(userClasses[0]);
+      }
+      
+    } catch (error) {
+      console.error("Error fetching classes:", error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch classes.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [currentUser, propSelectedClass, fetchCurrentClassData, toast]);
+  
+  useEffect(() => {
     fetchClasses();
     
     // Set up a refresh interval to check for active classes
-    const intervalId = setInterval(fetchClasses, 30000); // 30 seconds
+    const intervalId = setInterval(fetchClasses, 10000); // 10 seconds - faster refresh
     
     return () => clearInterval(intervalId);
-  }, [currentUser, propSelectedClass]);
+  }, [fetchClasses]);
 
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
     setLoading(true);
-    setTimeout(() => {
-      // The useEffect will run again to fetch classes
-      setLoading(false);
-    }, 1000);
+    await fetchClasses();
+    setLoading(false);
   };
 
   if (loading) {

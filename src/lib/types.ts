@@ -16,6 +16,7 @@ export interface AttendanceRecord {
     accuracy: number;
   };
   classId: string; // Required for class-based attendance tracking
+  sessionId?: string; // Session identifier
 }
 
 export interface Class {
@@ -32,6 +33,8 @@ export interface Class {
   startTime?: any;
   endTime?: any;
   duration?: number; // Minutes
+  currentSessionId?: string; // Current session ID
+  lastSessionId?: string; // Last session ID
 }
 
 export interface PendingAttendance {
@@ -42,6 +45,7 @@ export interface PendingAttendance {
   timestamp: number;
   date: string;
   classId: string;
+  sessionId?: string;
 }
 
 // Add StudentRecord interface to help with storing student information

@@ -1,6 +1,6 @@
 
-import React, { useEffect, useState } from 'react';
-import { ref, onValue, off } from 'firebase/database';
+import React, { useEffect, useState, useCallback } from 'react';
+import { ref, onValue, off, get } from 'firebase/database';
 import { database, firestore } from '@/lib/firebase';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -8,7 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import { RefreshCcw, UserCheck } from 'lucide-react';
 import { PendingAttendance } from '@/lib/types';
 import { useAuth } from '@/hooks/useAuth';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs, query, where, getDoc, doc } from 'firebase/firestore';
+import { useToast } from '@/hooks/use-toast';
 
 interface LiveAttendanceSheetProps {
   classId: string;
@@ -19,37 +20,40 @@ const LiveAttendanceSheet: React.FC<LiveAttendanceSheetProps> = ({ classId }) =>
   const [loading, setLoading] = useState(true);
   const [isSessionActive, setIsSessionActive] = useState(false);
   const { currentUser } = useAuth();
+  const { toast } = useToast();
+  
+  const checkClassActive = useCallback(async () => {
+    try {
+      if (!classId) {
+        setIsSessionActive(false);
+        return;
+      }
+      
+      // Get real-time class status directly from Firestore
+      const classDoc = await getDoc(doc(firestore, 'classes', classId));
+      
+      if (classDoc.exists()) {
+        const classData = classDoc.data();
+        setIsSessionActive(classData.isActive === true);
+      } else {
+        setIsSessionActive(false);
+      }
+    } catch (error) {
+      console.error('Error checking class status:', error);
+      setIsSessionActive(false);
+    }
+  }, [classId]);
 
   useEffect(() => {
     if (!classId) {
       setLoading(false);
+      setLiveAttendance([]);
       return;
     }
 
     setLoading(true);
     
     // Check if class is active
-    const checkClassActive = async () => {
-      try {
-        // Query to check if the class is active
-        const classQuery = query(
-          collection(firestore, 'classes'),
-          where('id', '==', classId),
-        );
-        
-        const classSnapshot = await getDocs(classQuery);
-        if (!classSnapshot.empty) {
-          const classData = classSnapshot.docs[0].data();
-          setIsSessionActive(classData.isActive === true);
-        } else {
-          setIsSessionActive(false);
-        }
-      } catch (error) {
-        console.error('Error checking class status:', error);
-        setIsSessionActive(false);
-      }
-    };
-    
     checkClassActive();
     
     // Reference to the pending attendance for this class
@@ -74,16 +78,23 @@ const LiveAttendanceSheet: React.FC<LiveAttendanceSheetProps> = ({ classId }) =>
       
       setLiveAttendance(attendanceList);
       setLoading(false);
+      
+      // Recheck class status when attendance data changes
+      checkClassActive();
     }, (error) => {
       console.error('Error loading live attendance:', error);
       setLoading(false);
     });
     
-    // Cleanup listener on unmount
+    // Set up polling to check class status every 10 seconds
+    const intervalId = setInterval(checkClassActive, 10000);
+    
+    // Cleanup listener and interval on unmount
     return () => {
       off(attendanceRef);
+      clearInterval(intervalId);
     };
-  }, [classId]);
+  }, [classId, checkClassActive]);
 
   if (loading) {
     return (

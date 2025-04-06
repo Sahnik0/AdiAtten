@@ -68,6 +68,60 @@ export const updateClassAttendanceSession = async (classId: string, isActive: bo
   }
 };
 
+// Helper function to fetch attendance records without complex indexed queries
+export const getAttendanceRecordsForClass = async (classId: string) => {
+  try {
+    // Use a simple query that doesn't require complex indexes
+    const attendanceQuery = query(
+      collection(firestore, 'attendance'),
+      where('classId', '==', classId)
+    );
+    
+    const snapshot = await getDocs(attendanceQuery);
+    const records: any[] = [];
+    
+    snapshot.forEach(doc => {
+      records.push({
+        id: doc.id,
+        ...doc.data()
+      });
+    });
+    
+    // Sort by timestamp
+    records.sort((a, b) => {
+      const timeA = a.timestamp?.toDate?.() || new Date(0);
+      const timeB = b.timestamp?.toDate?.() || new Date(0);
+      return timeB.getTime() - timeA.getTime();
+    });
+    
+    return records;
+  } catch (error) {
+    console.error("Error fetching attendance records:", error);
+    return [];
+  }
+};
+
+// Helper function to check if attendance is already marked for a session
+export const isAttendanceMarkedForSession = async (userId: string, classId: string, sessionId?: string) => {
+  try {
+    if (!sessionId) {
+      // Get the current session ID from the class
+      const classDoc = await getDoc(doc(firestore, 'classes', classId));
+      if (!classDoc.exists()) return false;
+      sessionId = classDoc.data().currentSessionId;
+      if (!sessionId) return false;
+    }
+    
+    const attendanceId = `${userId}_${classId}_${sessionId}`;
+    const attendanceDoc = await getDoc(doc(firestore, 'attendance', attendanceId));
+    
+    return attendanceDoc.exists();
+  } catch (error) {
+    console.error("Error checking attendance status:", error);
+    return false;
+  }
+};
+
 // Helper function to check if a student is enrolled in a specific class
 export const isStudentInClass = async (userId: string, classId: string): Promise<boolean> => {
   try {
@@ -321,8 +375,3 @@ service cloud.firestore {
 */
 
 export default app;
-
-
-function updateDoc(classRef: DocumentReference<DocumentData>, arg1: { isActive: boolean; endTime?: Timestamp; startTime?: Timestamp; lastSessionId?: string; currentSessionId?: string | null; }) {
-  return firestoreUpdateDoc(classRef, arg1);
-}

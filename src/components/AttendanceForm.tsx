@@ -1,7 +1,7 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { collection, getDocs, query, where, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { ref, set } from 'firebase/database';
+import { ref, set, get } from 'firebase/database';
 import { firestore, database } from '@/lib/firebase';
 import { useAuth } from '@/hooks/useAuth';
 import { useGeolocation } from '@/hooks/useGeolocation';
@@ -9,7 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { MapPin, AlertTriangle, Check, Clock } from 'lucide-react';
+import { MapPin, AlertTriangle, Check, Clock, RefreshCw } from 'lucide-react';
 import { Class } from '@/lib/types';
 
 interface AttendanceFormProps {
@@ -31,35 +31,63 @@ const AttendanceForm = ({ selectedClass }: AttendanceFormProps) => {
   
   const [submitting, setSubmitting] = useState(false);
   const [attendanceMarked, setAttendanceMarked] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadingSession, setLoadingSession] = useState(false);
+
+  // Function to check attendance status
+  const checkAttendanceStatus = useCallback(async () => {
+    if (!currentUser || !selectedClass) {
+      setAttendanceMarked(false);
+      return;
+    }
+    
+    setLoadingSession(true);
+    
+    try {
+      // Get the latest class data to check active status
+      const classDoc = await getDoc(doc(firestore, 'classes', selectedClass.id));
+      const classData = classDoc.exists() ? classDoc.data() as Class : null;
+      
+      if (!classData || !classData.isActive) {
+        setAttendanceMarked(false);
+        setLoadingSession(false);
+        return;
+      }
+      
+      const sessionId = classData.currentSessionId || 'latest';
+      
+      // Check if this student already marked attendance for the current session
+      const attendanceRef = ref(database, `attendancePending/${selectedClass.id}/${currentUser.uid}`);
+      const pendingSnapshot = await get(attendanceRef);
+      
+      const firestoreRef = doc(firestore, 'attendance', `${currentUser.uid}_${selectedClass.id}_${sessionId}`);
+      const fsSnapshot = await getDoc(firestoreRef);
+      
+      setAttendanceMarked(pendingSnapshot.exists() || fsSnapshot.exists());
+    } catch (error) {
+      console.error("Error checking attendance status:", error);
+      setAttendanceMarked(false);
+    } finally {
+      setLoadingSession(false);
+    }
+  }, [currentUser, selectedClass]);
 
   useEffect(() => {
-    const checkAttendanceStatus = async () => {
-      if (!currentUser || !selectedClass) return;
-      
-      try {
-        // Check if the class has an active attendance session
-        if (!selectedClass.isActive) {
-          setAttendanceMarked(false);
-          return;
-        }
-        
-        // Check if this student already marked attendance for the current session
-        const attendanceRef = ref(database, `attendancePending/${selectedClass.id}/${currentUser.uid}`);
-        const pendingSnapshot = await getDoc(doc(firestore, 'attendance', `${currentUser.uid}_${selectedClass.id}_${selectedClass.currentSessionId || 'latest'}`));
-        
-        if (pendingSnapshot.exists()) {
-          setAttendanceMarked(true);
-        } else {
-          setAttendanceMarked(false);
-        }
-      } catch (error) {
-        console.error("Error checking attendance status:", error);
-        setAttendanceMarked(false);
-      }
-    };
-    
     checkAttendanceStatus();
-  }, [currentUser, selectedClass]);
+    
+    // Set up polling to check attendance status every 15 seconds
+    const intervalId = setInterval(checkAttendanceStatus, 15000);
+    
+    return () => clearInterval(intervalId);
+  }, [checkAttendanceStatus]);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await checkAttendanceStatus();
+    setTimeout(() => {
+      setRefreshing(false);
+    }, 1000);
+  };
 
   const handleMarkAttendance = async () => {
     if (!currentUser) {
@@ -80,7 +108,11 @@ const AttendanceForm = ({ selectedClass }: AttendanceFormProps) => {
       return;
     }
 
-    if (!selectedClass.isActive) {
+    // Recheck class status before submitting
+    const classDoc = await getDoc(doc(firestore, 'classes', selectedClass.id));
+    const classData = classDoc.exists() ? classDoc.data() as Class : null;
+    
+    if (!classData || !classData.isActive) {
       toast({
         title: "Error",
         description: "There is no active attendance session for this class.",
@@ -111,7 +143,7 @@ const AttendanceForm = ({ selectedClass }: AttendanceFormProps) => {
 
     try {
       const today = new Date().toISOString().split('T')[0];
-      const sessionId = selectedClass.currentSessionId || today;
+      const sessionId = classData.currentSessionId || today;
       const attendanceId = `${currentUser.uid}_${selectedClass.id}_${sessionId}`;
 
       // Store in Firestore for permanent record
@@ -177,6 +209,24 @@ const AttendanceForm = ({ selectedClass }: AttendanceFormProps) => {
             </p>
           </div>
         </CardContent>
+        <CardFooter>
+          <Button 
+            onClick={handleRefresh} 
+            variant="outline" 
+            className="w-full"
+            disabled={refreshing}
+          >
+            {refreshing ? (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> Refreshing...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4" /> Refresh Status
+              </>
+            )}
+          </Button>
+        </CardFooter>
       </Card>
     );
   }
@@ -235,11 +285,13 @@ const AttendanceForm = ({ selectedClass }: AttendanceFormProps) => {
                 <p className={`font-medium ${
                   selectedClass.isActive ? 'text-blue-700' : 'text-gray-700'
                 }`}>
-                  {selectedClass.isActive 
-                    ? `Active Attendance: ${selectedClass.name}` 
-                    : `No Active Attendance for ${selectedClass.name}`}
+                  {loadingSession ? 'Checking session status...' : (
+                    selectedClass.isActive 
+                      ? `Active Attendance: ${selectedClass.name}` 
+                      : `No Active Attendance for ${selectedClass.name}`
+                  )}
                 </p>
-                {selectedClass.isActive && (
+                {selectedClass.isActive && !loadingSession && (
                   <p className="text-sm text-blue-600">
                     {selectedClass.startTime && 
                       `Started at ${new Date(selectedClass.startTime.toDate()).toLocaleTimeString()}`}
@@ -247,7 +299,7 @@ const AttendanceForm = ({ selectedClass }: AttendanceFormProps) => {
                       ` • Ends at ${new Date(selectedClass.endTime.toDate()).toLocaleTimeString()}`}
                   </p>
                 )}
-                {!selectedClass.isActive && (
+                {!selectedClass.isActive && !loadingSession && (
                   <p className="text-sm text-gray-600">
                     Wait for your instructor to start an attendance session.
                   </p>
@@ -265,7 +317,7 @@ const AttendanceForm = ({ selectedClass }: AttendanceFormProps) => {
           </Alert>
         )}
       </CardContent>
-      <CardFooter>
+      <CardFooter className="flex flex-col sm:flex-row gap-2">
         <Button 
           onClick={handleMarkAttendance} 
           disabled={
@@ -274,11 +326,29 @@ const AttendanceForm = ({ selectedClass }: AttendanceFormProps) => {
             !isWithinCampus || 
             !selectedClass ||
             !selectedClass.isActive ||
-            attendanceMarked
+            attendanceMarked ||
+            loadingSession
           }
           className="w-full"
         >
           {submitting ? 'Submitting...' : 'Mark Attendance'}
+        </Button>
+        
+        <Button 
+          onClick={handleRefresh} 
+          variant="outline" 
+          className="w-full"
+          disabled={refreshing}
+        >
+          {refreshing ? (
+            <>
+              <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> Refreshing...
+            </>
+          ) : (
+            <>
+              <RefreshCw className="mr-2 h-4 w-4" /> Refresh Status
+            </>
+          )}
         </Button>
       </CardFooter>
     </Card>
