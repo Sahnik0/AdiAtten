@@ -3,102 +3,91 @@ import { useState, useEffect } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 
-// Default campus coordinates
-const CAMPUS_LATITUDE = 22.650206701740068;
-const CAMPUS_LONGITUDE = 88.43129649251308;
-const DEFAULT_MAX_DISTANCE = 100; // Reduced from 800 to 100 meters as requested
+// Default campus boundary (can be overridden by admin settings)
+const DEFAULT_CAMPUS_LOCATION = {
+  latitude: 22.6750,
+  longitude: 88.4417
+};
 
-interface GeolocationPosition {
-  latitude: number;
-  longitude: number;
-  accuracy: number;
-}
+// Maximum allowed distance in meters (100 meters as requested)
+const DEFAULT_MAX_DISTANCE = 100;
 
 export const useGeolocation = () => {
-  const [currentLocation, setCurrentLocation] = useState<GeolocationPosition | null>(null);
-  const [isWithinCampus, setIsWithinCampus] = useState(false);
+  const [currentLocation, setCurrentLocation] = useState<GeolocationPosition['coords'] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [campusCoordinates, setCampusCoordinates] = useState({
-    latitude: CAMPUS_LATITUDE,
-    longitude: CAMPUS_LONGITUDE
-  });
+  const [campusLocation, setCampusLocation] = useState(DEFAULT_CAMPUS_LOCATION);
   const [maxAllowedDistance, setMaxAllowedDistance] = useState(DEFAULT_MAX_DISTANCE);
   const [distance, setDistance] = useState<number | null>(null);
+  const [isWithinCampus, setIsWithinCampus] = useState(false);
 
+  // Get geolocation settings from Firestore
   useEffect(() => {
-    const fetchGeolocationSettings = async () => {
+    const fetchGeoSettings = async () => {
       try {
-        const settingsRef = doc(firestore, 'settings', 'geolocation');
-        const settingsDoc = await getDoc(settingsRef);
+        const settingsDoc = await getDoc(doc(firestore, 'settings', 'geolocation'));
         
         if (settingsDoc.exists()) {
           const data = settingsDoc.data();
-          
-          if (data.centerLatitude && data.centerLongitude) {
-            setCampusCoordinates({
-              latitude: data.centerLatitude,
-              longitude: data.centerLongitude
+          // Support both old and new field names for backward compatibility
+          if ((data.latitude !== undefined && data.longitude !== undefined) || 
+              (data.centerLatitude !== undefined && data.centerLongitude !== undefined)) {
+            setCampusLocation({
+              latitude: data.latitude || data.centerLatitude || DEFAULT_CAMPUS_LOCATION.latitude,
+              longitude: data.longitude || data.centerLongitude || DEFAULT_CAMPUS_LOCATION.longitude
             });
           }
           
-          if (data.radiusInMeters) {
-            // Ensure radius is within min and max bounds (10-100m)
-            const radius = Math.min(Math.max(data.radiusInMeters, 10), 100);
-            setMaxAllowedDistance(radius);
+          // Use admin-defined max distance, but cap it at 100m
+          if (data.maxDistance !== undefined || data.radiusInMeters !== undefined) {
+            const maxDistance = Math.min(data.maxDistance || data.radiusInMeters || DEFAULT_MAX_DISTANCE, 100);
+            setMaxAllowedDistance(maxDistance);
+          } else {
+            setMaxAllowedDistance(DEFAULT_MAX_DISTANCE);
           }
         }
-      } catch (err) {
-        console.error('Error fetching geolocation settings:', err);
+      } catch (error) {
+        console.error("Error fetching geolocation settings:", error);
       }
     };
     
-    fetchGeolocationSettings();
+    fetchGeoSettings();
   }, []);
 
-  // Calculate distance between two coordinates using the Haversine formula
-  const getDistanceFromCampus = (position: GeolocationPosition) => {
-    const rad = (x: number) => (x * Math.PI) / 180;
+  // Calculate distance between two coordinates in meters
+  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     const R = 6371e3; // Earth's radius in meters
-    
-    const dLat = rad(position.latitude - campusCoordinates.latitude);
-    const dLon = rad(position.longitude - campusCoordinates.longitude);
-    
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(rad(campusCoordinates.latitude)) *
-        Math.cos(rad(position.latitude)) *
-        Math.sin(dLon / 2) *
-        Math.sin(dLon / 2);
-        
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    const distance = R * c; // Distance in meters
-    
-    return distance;
+    const φ1 = lat1 * Math.PI/180;
+    const φ2 = lat2 * Math.PI/180;
+    const Δφ = (lat2-lat1) * Math.PI/180;
+    const Δλ = (lon2-lon1) * Math.PI/180;
+
+    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+              Math.cos(φ1) * Math.cos(φ2) *
+              Math.sin(Δλ/2) * Math.sin(Δλ/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+    return R * c; // Distance in meters
   };
 
-  // Check if a position is within campus bounds with improved accuracy handling
-  const checkLocation = (position: GeolocationPosition, maxDistance = maxAllowedDistance) => {
-    const calculatedDistance = getDistanceFromCampus(position);
+  // Check if user is within campus boundary
+  const checkLocation = (position: GeolocationPosition) => {
+    setCurrentLocation(position.coords);
+    
+    const userLat = position.coords.latitude;
+    const userLng = position.coords.longitude;
+    
+    const calculatedDistance = calculateDistance(
+      userLat, userLng,
+      campusLocation.latitude, campusLocation.longitude
+    );
+    
     setDistance(calculatedDistance);
-    
-    // More generous accuracy adjustment for better user experience
-    // If the GPS accuracy is low, be more lenient with the distance check
-    const accuracyFactor = position.accuracy > 100 ? 2 : 1.5;
-    const adjustedMaxDistance = maxDistance + (position.accuracy / accuracyFactor);
-    
-    // For very close distances, always consider within campus if within reasonable accuracy
-    const isVeryClose = calculatedDistance <= (maxDistance / 2);
-    
-    const withinCampus = isVeryClose || calculatedDistance <= adjustedMaxDistance;
-    
-    console.log(`Distance to campus: ${calculatedDistance.toFixed(2)}m, Max allowed: ${adjustedMaxDistance.toFixed(2)}m (Including accuracy adjustment), Result: ${withinCampus ? 'Within campus' : 'Outside campus'}`);
-    
-    setIsWithinCampus(withinCampus);
-    return withinCampus;
+    setIsWithinCampus(calculatedDistance <= maxAllowedDistance);
+    setLoading(false);
   };
 
-  // Get current position with improved location watching
+  // Get current position and set up watching
   useEffect(() => {
     if (!navigator.geolocation) {
       setError('Geolocation is not supported by your browser');
@@ -106,67 +95,43 @@ export const useGeolocation = () => {
       return;
     }
 
-    const handleSuccess = (position: GeolocationPosition) => {
-      const { latitude, longitude, accuracy } = position;
-      const locationData = { latitude, longitude, accuracy };
-      
-      console.log(`Got location: Lat ${latitude}, Long ${longitude}, Accuracy: ${accuracy}m`);
-      
-      setCurrentLocation(locationData);
-      checkLocation(locationData);
-      setLoading(false);
-    };
-
-    const handleError = (error: any) => {
-      console.error(`Geolocation error (${error.code}): ${error.message}`);
-      setError(`Error getting location: ${error.message}`);
-      setLoading(false);
-    };
-
-    // Initial position request with high accuracy
+    // Get initial position
     navigator.geolocation.getCurrentPosition(
-      ({ coords }) => handleSuccess({
-        latitude: coords.latitude,
-        longitude: coords.longitude,
-        accuracy: coords.accuracy
-      }),
-      handleError,
-      {
-        enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 0
-      }
+      position => {
+        checkLocation(position);
+      },
+      err => {
+        setError(`Error getting location: ${err.message}`);
+        setLoading(false);
+      },
+      { enableHighAccuracy: true }
     );
-
-    // Then continue watching position with more frequent updates
+    
+    // Watch position
     const watchId = navigator.geolocation.watchPosition(
-      ({ coords }) => handleSuccess({
-        latitude: coords.latitude,
-        longitude: coords.longitude,
-        accuracy: coords.accuracy
-      }),
-      handleError,
-      {
-        enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 0
-      }
+      position => {
+        checkLocation(position);
+      },
+      err => {
+        setError(`Error tracking location: ${err.message}`);
+        setLoading(false);
+      },
+      { enableHighAccuracy: true }
     );
-
-    // Clean up watch on unmount
+    
+    // Cleanup
     return () => {
       navigator.geolocation.clearWatch(watchId);
     };
-  }, [campusCoordinates, maxAllowedDistance]);
+  }, [campusLocation, maxAllowedDistance]);
 
-  return { 
-    currentLocation, 
-    isWithinCampus, 
-    loading, 
+  return {
+    currentLocation,
+    loading,
     error,
-    checkLocation,
-    campusCoordinates,
+    isWithinCampus,
+    distance,
     maxAllowedDistance,
-    distance
+    checkLocation
   };
 };

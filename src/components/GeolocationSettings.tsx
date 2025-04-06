@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
@@ -25,11 +24,11 @@ const GeolocationSettings = () => {
         
         if (settingsDoc.exists()) {
           const data = settingsDoc.data();
-          setCenterLatitude(data.centerLatitude);
-          setCenterLongitude(data.centerLongitude);
+          setCenterLatitude(data.latitude || data.centerLatitude || 22.6288);
+          setCenterLongitude(data.longitude || data.centerLongitude || 88.4682);
           
           // Ensure radius is within min and max bounds (10-100m)
-          const radius = Math.min(Math.max(data.radiusInMeters || 50, 10), 100);
+          const radius = Math.min(Math.max(data.maxDistance || data.radiusInMeters || 50, 10), 100);
           setRadiusInMeters(radius);
         }
       } catch (error) {
@@ -47,6 +46,10 @@ const GeolocationSettings = () => {
       const finalRadius = Math.min(Math.max(radiusInMeters, 10), 100);
       
       await setDoc(doc(firestore, 'settings', 'geolocation'), {
+        latitude: Number(centerLatitude),
+        longitude: Number(centerLongitude),
+        maxDistance: Number(finalRadius),
+        // Keep backward compatibility
         centerLatitude: Number(centerLatitude),
         centerLongitude: Number(centerLongitude),
         radiusInMeters: Number(finalRadius),

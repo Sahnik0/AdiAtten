@@ -2,7 +2,7 @@
 import { useAuth } from '@/hooks/useAuth';
 import { useEffect, useState } from 'react';
 import AttendanceForm from './AttendanceForm';
-import AdminPanel from '../components/ui/adminPanel';
+import AdminPanel from './ui/adminPanel';
 import EmailVerification from './EmailVerification';
 import ClassManagement from './ClassManagement';
 import { Class } from '@/lib/types';
@@ -12,7 +12,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AttendanceFormWrapper from './AttendanceFormWrapper';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
-import LiveAttendanceSheet from '../components/LiveAttendanceSheet';
+import LiveAttendanceSheet from './LiveAttendanceSheet';
+import ReportIssue from './ReportIssue';
 
 const Dashboard = () => {
   const { currentUser, isDeviceVerified } = useAuth();
@@ -73,19 +74,28 @@ const Dashboard = () => {
   return (
     <div className="w-full max-w-6xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold">
-          Welcome, {currentUser.displayName || currentUser.email?.split('@')[0]}
-        </h1>
-        <p className="text-muted-foreground">
-          {currentUser.email} 
-          {currentUser.rollNumber && ` • Roll Number: ${currentUser.rollNumber}`}
-          {currentUser.isAdmin && ` • Admin`}
-        </p>
-        {selectedClass && (
-          <p className="mt-1 text-sm font-medium text-blue-600">
-            Selected Class: {selectedClass.name}
-          </p>
-        )}
+        <div className="flex flex-wrap justify-between items-center">
+          <div>
+            <h1 className="text-2xl font-bold">
+              Welcome, {currentUser.displayName || currentUser.email?.split('@')[0]}
+            </h1>
+            <p className="text-muted-foreground">
+              {currentUser.email} 
+              {currentUser.rollNumber && ` • Roll Number: ${currentUser.rollNumber}`}
+              {currentUser.isAdmin && ` • Admin`}
+            </p>
+            {selectedClass && (
+              <p className="mt-1 text-sm font-medium text-blue-600">
+                Selected Class: {selectedClass.name}
+              </p>
+            )}
+          </div>
+          {!currentUser.isAdmin && (
+            <div className="mt-2 md:mt-0">
+              <ReportIssue />
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Email verification notice for admins only */}

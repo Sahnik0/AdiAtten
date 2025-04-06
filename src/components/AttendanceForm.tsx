@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { collection, getDocs, query, where, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, set } from 'firebase/database';
@@ -32,7 +31,6 @@ const AttendanceForm = ({ selectedClass }: AttendanceFormProps) => {
   const [submitting, setSubmitting] = useState(false);
   const [attendanceMarked, setAttendanceMarked] = useState(false);
 
-  // Check if attendance has already been marked today for the selected class
   useEffect(() => {
     const checkAttendanceStatus = async () => {
       if (!currentUser || !selectedClass) return;
@@ -100,7 +98,6 @@ const AttendanceForm = ({ selectedClass }: AttendanceFormProps) => {
       const today = new Date().toISOString().split('T')[0];
       const attendanceId = `${currentUser.uid}_${today}_${selectedClass.id}`;
 
-      // Add to Firestore attendance collection
       await setDoc(doc(firestore, 'attendance', attendanceId), {
         userId: currentUser.uid,
         userEmail: currentUser.email,
@@ -117,7 +114,6 @@ const AttendanceForm = ({ selectedClass }: AttendanceFormProps) => {
         classId: selectedClass.id
       });
 
-      // Add to Realtime Database pending attendance
       await set(ref(database, `attendancePending/${selectedClass.id}/${currentUser.uid}`), {
         email: currentUser.email,
         name: currentUser.displayName || currentUser.email?.split('@')[0],
@@ -153,14 +149,6 @@ const AttendanceForm = ({ selectedClass }: AttendanceFormProps) => {
           </CardTitle>
           <CardDescription>Your attendance has been submitted and is pending verification by admin.</CardDescription>
         </CardHeader>
-        <CardFooter>
-          <Button 
-            onClick={() => setAttendanceMarked(false)}
-            variant="outline"
-          >
-            Mark Another Attendance
-          </Button>
-        </CardFooter>
       </Card>
     );
   }
@@ -174,7 +162,6 @@ const AttendanceForm = ({ selectedClass }: AttendanceFormProps) => {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Location Status */}
         <div className={`p-4 rounded-md ${
           isWithinCampus 
             ? 'bg-green-50 border border-green-100' 
@@ -206,7 +193,6 @@ const AttendanceForm = ({ selectedClass }: AttendanceFormProps) => {
           </div>
         </div>
 
-        {/* Class information */}
         {selectedClass ? (
           <div className="bg-blue-50 border border-blue-100 p-4 rounded-md">
             <div className="flex">
