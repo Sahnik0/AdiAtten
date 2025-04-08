@@ -54,7 +54,7 @@ export const useGeolocation = (options?: PositionOptions, watchPosition = false)
   const defaultOptions: PositionOptions = {
     enableHighAccuracy: true,
     // Reduce timeout to avoid long waiting periods
-    timeout: 5000, // 5 seconds instead of 10
+    timeout: 10000, // 5 seconds instead of 10
     maximumAge: 0,
     ...options
   };
@@ -200,7 +200,7 @@ export const useGeolocation = (options?: PositionOptions, watchPosition = false)
             defaultOptions
           );
         }
-      }, 1000); // Wait 1 second before retry
+      }, 2000); // Wait 1 second before retry
       
       return;
     }

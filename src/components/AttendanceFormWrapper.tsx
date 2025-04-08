@@ -130,7 +130,7 @@ const AttendanceFormWrapper: React.FC<AttendanceFormWrapperProps> = ({ selectedC
     fetchClasses();
     
     // Set up a refresh interval to check for active classes
-    const intervalId = setInterval(fetchClasses, 10000); // 10 seconds - faster refresh
+    const intervalId = setInterval(fetchClasses, 20000); // 10 seconds - faster refresh
     
     return () => clearInterval(intervalId);
   }, [fetchClasses]);

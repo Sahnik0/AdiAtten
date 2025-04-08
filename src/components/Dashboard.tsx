@@ -80,7 +80,7 @@ const Dashboard = () => {
     const intervalId = setInterval(() => {
       setSilentlyRefreshing(true);
       fetchClasses();
-    }, 5000); // Refresh every 5 seconds
+    }, 19000); // Refresh every 5 seconds
     
     return () => clearInterval(intervalId);
   }, [currentUser]);
