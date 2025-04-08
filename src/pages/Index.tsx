@@ -6,7 +6,7 @@ import { Toaster } from '@/components/ui/toaster';
 
 const Index = () => {
   useEffect(() => {
-    document.title = 'Campus Guard Attendance System';
+    document.title = 'AdiAtten Attendance System';
   }, []);
 
   return (

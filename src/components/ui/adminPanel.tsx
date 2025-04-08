@@ -1,17 +1,15 @@
-
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Class } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import LiveAttendanceSheet from '@/components/LiveAttendanceSheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/hooks/useAuth';
 import UserReports from '@/components/UserReports';
-import { collection, getDocs, query, where, doc, updateDoc, setDoc, serverTimestamp, getDoc } from 'firebase/firestore';
+import { collection, getDocs, query, where, doc, updateDoc, setDoc, serverTimestamp, getDoc, onSnapshot } from 'firebase/firestore';
 import { firestore, database } from '@/lib/firebase';
-import { useState, useEffect } from 'react';
 import { AttendanceRecord } from '@/lib/types';
 import { Button } from '@/components/ui/button';
-import { Download, History, ClipboardCopy, Settings, RefreshCw, Power } from 'lucide-react';
+import { Download, History, ClipboardCopy, Settings, RefreshCcw, Power, Play } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import GeolocationSettings from '@/components/GeolocationSettings';
 import { ref, remove, get } from 'firebase/database';
@@ -25,14 +23,19 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
   const [attendanceHistory, setAttendanceHistory] = useState<AttendanceRecord[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [endingSession, setEndingSession] = useState(false);
+  const [startingSession, setStartingSession] = useState(false);
+  const [classData, setClassData] = useState<Class | null>(null);
   const { toast } = useToast();
+  
+  useEffect(() => {
+    setClassData(selectedClass);
+  }, [selectedClass]);
   
   const fetchAttendanceHistory = async () => {
     if (!selectedClass) return;
     
     setHistoryLoading(true);
     try {
-      // Use a simpler query to avoid index issues
       const attendanceQuery = query(
         collection(firestore, 'attendance'),
         where('classId', '==', selectedClass.id)
@@ -42,13 +45,23 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
       const records: AttendanceRecord[] = [];
       
       snapshot.forEach(doc => {
+        const data = doc.data();
         records.push({
           id: doc.id,
-          ...doc.data()
-        } as AttendanceRecord);
+          userId: data.userId,
+          userEmail: data.userEmail,
+          userName: data.userName,
+          rollNumber: data.rollNumber,
+          timestamp: data.timestamp,
+          date: data.date,
+          verified: data.verified,
+          location: data.location,
+          classId: data.classId,
+          sessionId: data.sessionId,
+          automarked: data.automarked
+        });
       });
       
-      // Sort by timestamp
       records.sort((a, b) => {
         const timeA = a.timestamp?.toDate?.() || new Date(0);
         const timeB = b.timestamp?.toDate?.() || new Date(0);
@@ -71,15 +84,77 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
   useEffect(() => {
     if (selectedClass) {
       fetchAttendanceHistory();
+      
+      const unsubscribeClassListener = onSnapshot(doc(firestore, 'classes', selectedClass.id), 
+        (doc) => {
+          if (doc.exists()) {
+            const updatedClass = { 
+              id: doc.id, 
+              ...doc.data() 
+            } as Class;
+            setClassData(updatedClass);
+          }
+        }, 
+        (error) => {
+          console.error("Error setting up class listener:", error);
+        });
+      
+      return () => {
+        unsubscribeClassListener();
+      };
     }
   }, [selectedClass]);
+
+  const startAttendanceSession = async () => {
+    if (!selectedClass) return;
+    
+    setStartingSession(true);
+    try {
+      const sessionId = `${selectedClass.id}_${Date.now()}`;
+      
+      const classRef = doc(firestore, 'classes', selectedClass.id);
+      await updateDoc(classRef, {
+        isActive: true,
+        startTime: serverTimestamp(),
+        currentSessionId: sessionId,
+        endTime: null
+      });
+      
+      const pendingRef = ref(database, `attendancePending/${selectedClass.id}`);
+      await remove(pendingRef);
+      
+      toast({
+        title: "Session Started",
+        description: "Attendance session has been started successfully.",
+      });
+      
+      setClassData(prev => {
+        if (!prev) return selectedClass;
+        return {
+          ...prev,
+          isActive: true,
+          currentSessionId: sessionId,
+          startTime: new Date()
+        };
+      });
+      
+    } catch (error) {
+      console.error("Error starting attendance session:", error);
+      toast({
+        title: "Error",
+        description: "Failed to start attendance session. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setStartingSession(false);
+    }
+  };
 
   const endAttendanceSession = async () => {
     if (!selectedClass) return;
     
     setEndingSession(true);
     try {
-      // Get most up-to-date class data
       const classRef = doc(firestore, 'classes', selectedClass.id);
       const classDoc = await getDoc(classRef);
       if (!classDoc.exists()) {
@@ -88,18 +163,31 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
       
       const classData = classDoc.data() as Class;
       
-      // Get current session ID
-      const sessionId = classData.currentSessionId || new Date().toISOString().split('T')[0];
+      const sessionId = classData.currentSessionId || `${selectedClass.id}_${Date.now()}`;
       
-      // Get the pending attendance data
       const pendingRef = ref(database, `attendancePending/${selectedClass.id}`);
       const pendingSnapshot = await get(pendingRef);
       const pendingData = pendingSnapshot.val() || {};
       
-      // Get all enrolled students
+      for (const userId in pendingData) {
+        const student = pendingData[userId];
+        const attendanceId = `${userId}_${selectedClass.id}_${sessionId}`;
+        await setDoc(doc(firestore, 'attendance', attendanceId), {
+          userId: userId,
+          userEmail: student.email,
+          userName: student.name,
+          rollNumber: student.rollNumber || '',
+          timestamp: serverTimestamp(),
+          date: new Date().toISOString().split('T')[0],
+          verified: true,
+          classId: selectedClass.id,
+          sessionId: sessionId
+        });
+      }
+      
       const enrolledQuery = query(
         collection(firestore, 'users'),
-        where('classes', 'array-contains', selectedClass.id)
+        where('enrolledClass', '==', selectedClass.id)
       );
       
       const enrolledSnapshot = await getDocs(enrolledQuery);
@@ -112,14 +200,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
         });
       });
       
-      // Mark absent for students who didn't mark attendance
-      const today = new Date().toISOString().split('T')[0];
-      
       for (const student of enrolledStudents) {
-        // Skip if student already marked attendance
         if (pendingData[student.id]) continue;
         
-        // Mark student as absent
         const attendanceId = `${student.id}_${selectedClass.id}_${sessionId}`;
         await setDoc(doc(firestore, 'attendance', attendanceId), {
           userId: student.id,
@@ -127,24 +210,21 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
           userName: student.displayName || student.email,
           rollNumber: student.rollNumber || '',
           timestamp: serverTimestamp(),
-          date: today,
-          verified: false, // Marked as absent
+          date: new Date().toISOString().split('T')[0],
+          verified: false,
           classId: selectedClass.id,
           sessionId: sessionId,
-          automarked: true // Flag to indicate this was automatically marked
+          automarked: true
         });
       }
       
-      // Update class to inactive
       await updateDoc(classRef, {
         isActive: false,
         endTime: serverTimestamp(),
-        // Store the session ID so we can reference it later
         lastSessionId: sessionId,
         currentSessionId: null
       });
       
-      // Clear pending attendance data
       await remove(pendingRef);
       
       toast({
@@ -153,6 +233,18 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
       });
       
       fetchAttendanceHistory();
+      
+      setClassData(prev => {
+        if (!prev) return selectedClass;
+        return {
+          ...prev,
+          isActive: false,
+          lastSessionId: sessionId,
+          currentSessionId: null,
+          endTime: new Date()
+        };
+      });
+      
     } catch (error) {
       console.error("Error ending attendance session:", error);
       toast({
@@ -195,7 +287,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
       return;
     }
     
-    // Group by session ID to sort reports by session
     const sessionGroups: Record<string, AttendanceRecord[]> = {};
     attendanceHistory.forEach(record => {
       const sessionId = record.sessionId || 'unknown';
@@ -210,7 +301,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
     
     csvRows.push(headers.join(','));
     
-    // Sort by most recent sessions first
     const sortedSessions = Object.keys(sessionGroups).sort().reverse();
     
     sortedSessions.forEach(sessionId => {
@@ -250,81 +340,57 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
     document.body.removeChild(link);
   };
 
-  const generateAttendanceReport = () => {
-    if (attendanceHistory.length === 0) {
-      toast({
-        title: "No Records",
-        description: "There are no attendance records to generate a report.",
-      });
-      return "";
-    }
+  const generateAttendanceReportForSession = (sessionId: string, records: AttendanceRecord[]) => {
+    if (records.length === 0) return "";
     
-    // Group by session ID
-    const sessionGroups: Record<string, AttendanceRecord[]> = {};
-    attendanceHistory.forEach(record => {
-      const sessionId = record.sessionId || 'unknown';
-      if (!sessionGroups[sessionId]) {
-        sessionGroups[sessionId] = [];
-      }
-      sessionGroups[sessionId].push(record);
-    });
-    
-    // Sort by most recent sessions first
-    const sortedSessions = Object.keys(sessionGroups).sort().reverse();
+    const sessionDate = records[0]?.date || 'Unknown date';
     
     let report = `ATTENDANCE REPORT - ${selectedClass.name}\n`;
     report += `====================\n\n`;
+    report += `Session: ${sessionId}\n`;
+    report += `Date: ${sessionDate}\n`;
     report += `Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}\n\n`;
     
-    sortedSessions.forEach(sessionId => {
-      const records = sessionGroups[sessionId];
-      const sessionDate = records[0]?.date || 'Unknown date';
+    const presentStudents = records
+      .filter(record => record.verified)
+      .sort((a, b) => (a.rollNumber || "").localeCompare(b.rollNumber || ""));
       
-      report += `SESSION: ${sessionId} (${sessionDate})\n`;
-      report += `=====================\n\n`;
-      
-      const presentStudents = records
-        .filter(record => record.verified)
-        .sort((a, b) => (a.rollNumber || "").localeCompare(b.rollNumber || ""));
-        
-      const absentStudents = records
-        .filter(record => !record.verified)
-        .sort((a, b) => (a.rollNumber || "").localeCompare(b.rollNumber || ""));
-      
-      report += `PRESENT STUDENTS (${presentStudents.length}):\n`;
-      report += `------------------------\n`;
-      
-      presentStudents.forEach((student, index) => {
-        report += `${index + 1}. ${student.userName || 'Unknown'} (${student.rollNumber || 'N/A'})\n`;
-      });
-      
-      report += `\nABSENT STUDENTS (${absentStudents.length}):\n`;
-      report += `------------------------\n`;
-      
-      absentStudents.forEach((student, index) => {
-        report += `${index + 1}. ${student.userName || 'Unknown'} (${student.rollNumber || 'N/A'})\n`;
-      });
-      
-      report += `\nSESSION SUMMARY:\n`;
-      report += `Total Students: ${records.length}\n`;
-      report += `Present: ${presentStudents.length}\n`;
-      report += `Absent: ${absentStudents.length}\n`;
-      report += `Attendance Rate: ${Math.round((presentStudents.length / records.length) * 100)}%\n\n`;
-      report += `====================\n\n`;
+    const absentStudents = records
+      .filter(record => !record.verified)
+      .sort((a, b) => (a.rollNumber || "").localeCompare(b.rollNumber || ""));
+    
+    report += `PRESENT STUDENTS (${presentStudents.length}):\n`;
+    report += `------------------------\n`;
+    
+    presentStudents.forEach((student, index) => {
+      report += `${index + 1}. ${student.userName || 'Unknown'} (${student.rollNumber || 'N/A'})\n`;
     });
+    
+    report += `\nABSENT STUDENTS (${absentStudents.length}):\n`;
+    report += `------------------------\n`;
+    
+    absentStudents.forEach((student, index) => {
+      report += `${index + 1}. ${student.userName || 'Unknown'} (${student.rollNumber || 'N/A'})\n`;
+    });
+    
+    report += `\nSESSION SUMMARY:\n`;
+    report += `Total Students: ${records.length}\n`;
+    report += `Present: ${presentStudents.length}\n`;
+    report += `Absent: ${absentStudents.length}\n`;
+    report += `Attendance Rate: ${Math.round((presentStudents.length / records.length) * 100)}%\n`;
     
     return report;
   };
   
-  const copyReportToClipboard = () => {
-    const report = generateAttendanceReport();
+  const copySessionReportToClipboard = (sessionId: string, records: AttendanceRecord[]) => {
+    const report = generateAttendanceReportForSession(sessionId, records);
     if (!report) return;
     
     navigator.clipboard.writeText(report)
       .then(() => {
         toast({
           title: "Success",
-          description: "Attendance report copied to clipboard",
+          description: "Session report copied to clipboard",
         });
       })
       .catch(err => {
@@ -336,7 +402,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
         });
       });
   };
-  
+
   if (!selectedClass || !currentUser?.isAdmin) {
     return (
       <Card>
@@ -348,6 +414,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
     );
   }
 
+  const isActive = classData?.isActive || false;
+
   return (
     <div className="space-y-6">
       <Card>
@@ -358,24 +426,45 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
         <CardContent>
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
             <p>Use the tabs below to manage attendance and view reports for this class.</p>
-            <Button 
-              onClick={endAttendanceSession} 
-              variant="destructive"
-              disabled={endingSession || !selectedClass.isActive}
-              className="whitespace-nowrap"
-            >
-              {endingSession ? (
-                <>
-                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                  Ending Session...
-                </>
+            <div className="flex space-x-2 flex-wrap gap-2">
+              {!isActive ? (
+                <Button 
+                  onClick={startAttendanceSession} 
+                  variant="default"
+                  disabled={startingSession}
+                  className="whitespace-nowrap"
+                >
+                  {startingSession ? (
+                    <>
+                      Starting...
+                    </>
+                  ) : (
+                    <>
+                      <Play className="h-4 w-4 mr-2" />
+                      Start Attendance Session
+                    </>
+                  )}
+                </Button>
               ) : (
-                <>
-                  <Power className="h-4 w-4 mr-2" />
-                  End Attendance Session
-                </>
+                <Button 
+                  onClick={endAttendanceSession} 
+                  variant="destructive"
+                  disabled={endingSession}
+                  className="whitespace-nowrap"
+                >
+                  {endingSession ? (
+                    <>
+                      Ending Session...
+                    </>
+                  ) : (
+                    <>
+                      <Power className="h-4 w-4 mr-2" />
+                      End Attendance Session
+                    </>
+                  )}
+                </Button>
               )}
-            </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -402,10 +491,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
               <div className="space-y-6">
                 <div className="flex flex-col sm:flex-row gap-4">
                   <Button onClick={exportAttendanceToCsv} className="w-full">
-                    <Download className="h-4 w-4 mr-2" /> Export as CSV
-                  </Button>
-                  <Button onClick={copyReportToClipboard} className="w-full" variant="outline">
-                    <ClipboardCopy className="h-4 w-4 mr-2" /> Copy as Text
+                    <Download className="h-4 w-4 mr-2" /> Export all as CSV
                   </Button>
                 </div>
                 
@@ -417,49 +503,87 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
                   <p className="text-center py-4 text-muted-foreground">No attendance records found for this class.</p>
                 ) : (
                   <div className="space-y-4">
-                    <div className="rounded-md border">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b bg-muted/50">
-                            <th className="px-4 py-2 text-left font-medium">Name</th>
-                            <th className="px-4 py-2 text-left font-medium">Roll Number</th>
-                            <th className="px-4 py-2 text-left font-medium">Date</th>
-                            <th className="px-4 py-2 text-left font-medium">Session</th>
-                            <th className="px-4 py-2 text-left font-medium">Status</th>
-                            <th className="px-4 py-2 text-left font-medium">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {attendanceHistory.map((record) => (
-                            <tr key={record.id} className="border-b">
-                              <td className="px-4 py-2">{record.userName}</td>
-                              <td className="px-4 py-2">{record.rollNumber || 'N/A'}</td>
-                              <td className="px-4 py-2">{record.date}</td>
-                              <td className="px-4 py-2">{record.sessionId || 'Unknown'}</td>
-                              <td className="px-4 py-2">
-                                <span className={`px-2 py-1 rounded-full text-xs ${
-                                  record.verified 
-                                    ? 'bg-green-100 text-green-800' 
-                                    : 'bg-red-100 text-red-800'
-                                }`}>
-                                  {record.verified ? 'Present' : 'Absent'}
-                                </span>
-                              </td>
-                              <td className="px-4 py-2">
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm"
-                                  onClick={() => resetDeviceId(record.userId)}
-                                  title="Reset Device ID"
-                                >
-                                  <RefreshCw className="h-4 w-4" />
-                                </Button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                    <h3 className="font-medium text-lg">Attendance History</h3>
+                    
+                    {Object.entries(attendanceHistory.reduce((acc, record) => {
+                      const sessionId = record.sessionId || 'unknown';
+                      if (!acc[sessionId]) {
+                        acc[sessionId] = [];
+                      }
+                      acc[sessionId].push(record);
+                      return acc;
+                    }, {} as Record<string, AttendanceRecord[]>))
+                    .sort(([sessionIdA], [sessionIdB]) => sessionIdB.localeCompare(sessionIdA))
+                    .map(([sessionId, records]) => {
+                      const sessionDate = records[0]?.date || 'Unknown';
+                      const presentCount = records.filter(r => r.verified).length;
+                      const totalCount = records.length;
+                      
+                      return (
+                        <Card key={sessionId} className="mb-4">
+                          <CardHeader className="pb-2">
+                            <div className="flex justify-between items-center">
+                              <div>
+                                <CardTitle className="text-base">
+                                  Session: {sessionDate}
+                                </CardTitle>
+                                <CardDescription>
+                                  Present: {presentCount}/{totalCount} ({Math.round((presentCount/totalCount) * 100)}%)
+                                </CardDescription>
+                              </div>
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                onClick={() => copySessionReportToClipboard(sessionId, records)}
+                              >
+                                <ClipboardCopy className="h-4 w-4 mr-1" /> Copy Report
+                              </Button>
+                            </div>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="rounded-md border">
+                              <table className="w-full text-sm">
+                                <thead>
+                                  <tr className="border-b bg-muted/50">
+                                    <th className="px-4 py-2 text-left font-medium">Name</th>
+                                    <th className="px-4 py-2 text-left font-medium">Roll Number</th>
+                                    <th className="px-4 py-2 text-left font-medium">Status</th>
+                                    <th className="px-4 py-2 text-left font-medium">Actions</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {records.map((record) => (
+                                    <tr key={record.id} className="border-b">
+                                      <td className="px-4 py-2">{record.userName}</td>
+                                      <td className="px-4 py-2">{record.rollNumber || 'N/A'}</td>
+                                      <td className="px-4 py-2">
+                                        <span className={`px-2 py-1 rounded-full text-xs ${
+                                          record.verified 
+                                            ? 'bg-green-100 text-green-800' 
+                                            : 'bg-red-100 text-red-800'
+                                        }`}>
+                                          {record.verified ? 'Present' : 'Absent'}
+                                        </span>
+                                      </td>
+                                      <td className="px-4 py-2">
+                                        <Button 
+                                          variant="ghost" 
+                                          size="sm"
+                                          onClick={() => resetDeviceId(record.userId)}
+                                          title="Reset Device ID"
+                                        >
+                                          <RefreshCcw className="h-4 w-4" />
+                                        </Button>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -473,7 +597,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
         </TabsContent>
         
         <TabsContent value="userReports">
-          <UserReports />
+          <UserReports classId={selectedClass.id} />
         </TabsContent>
         
         <TabsContent value="settings">

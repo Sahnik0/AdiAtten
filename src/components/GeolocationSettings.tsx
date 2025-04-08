@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
@@ -5,18 +6,30 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Check, MapPin, Settings } from 'lucide-react';
+import { Check, MapPin, Settings, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Slider } from '@/components/ui/slider';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 const GeolocationSettings = () => {
   const [centerLatitude, setCenterLatitude] = useState(22.6288); // Default Adamas University coordinates
   const [centerLongitude, setCenterLongitude] = useState(88.4682);
   const [radiusInMeters, setRadiusInMeters] = useState(50); // Default 50m radius
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [hasLocationPermission, setHasLocationPermission] = useState(true);
   const { toast } = useToast();
 
   useEffect(() => {
+    // Check if we have location permission
+    if ('permissions' in navigator) {
+      navigator.permissions.query({ name: 'geolocation' }).then((result) => {
+        setHasLocationPermission(result.state !== 'denied');
+      }).catch(() => {
+        // If we can't check permissions, assume we have them
+        setHasLocationPermission(true);
+      });
+    }
+    
     const fetchSettings = async () => {
       try {
         const settingsRef = doc(firestore, 'settings', 'geolocation');
@@ -24,6 +37,9 @@ const GeolocationSettings = () => {
         
         if (settingsDoc.exists()) {
           const data = settingsDoc.data();
+          console.log("Loaded geolocation settings:", data);
+          
+          // Ensure we're getting the correct values
           setCenterLatitude(data.latitude || data.centerLatitude || 22.6288);
           setCenterLongitude(data.longitude || data.centerLongitude || 88.4682);
           
@@ -45,7 +61,7 @@ const GeolocationSettings = () => {
       // Ensure radius is within allowed range (10-100m) before saving
       const finalRadius = Math.min(Math.max(radiusInMeters, 10), 100);
       
-      await setDoc(doc(firestore, 'settings', 'geolocation'), {
+      const settingsData = {
         latitude: Number(centerLatitude),
         longitude: Number(centerLongitude),
         maxDistance: Number(finalRadius),
@@ -53,7 +69,12 @@ const GeolocationSettings = () => {
         centerLatitude: Number(centerLatitude),
         centerLongitude: Number(centerLongitude),
         radiusInMeters: Number(finalRadius),
-      });
+        updatedAt: new Date().toISOString()
+      };
+      
+      console.log("Saving geolocation settings:", settingsData);
+      
+      await setDoc(doc(firestore, 'settings', 'geolocation'), settingsData);
       
       setRadiusInMeters(finalRadius);
       
@@ -77,6 +98,11 @@ const GeolocationSettings = () => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
+          console.log("Got current location:", {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          });
+          
           setCenterLatitude(position.coords.latitude);
           setCenterLongitude(position.coords.longitude);
           
@@ -92,6 +118,15 @@ const GeolocationSettings = () => {
             description: error.message,
             variant: "destructive",
           });
+          
+          if (error.code === 1) {
+            setHasLocationPermission(false);
+          }
+        },
+        { 
+          enableHighAccuracy: true, 
+          timeout: 5000,
+          maximumAge: 0
         }
       );
     } else {
@@ -115,6 +150,15 @@ const GeolocationSettings = () => {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
+        {!hasLocationPermission && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              Location permission is blocked. Please enable location access in your browser settings.
+            </AlertDescription>
+          </Alert>
+        )}
+        
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label htmlFor="centerLatitude">Latitude</Label>
@@ -166,7 +210,11 @@ const GeolocationSettings = () => {
         </div>
 
         <div className="flex flex-col space-y-2">
-          <Button onClick={getCurrentLocation} variant="outline">
+          <Button 
+            onClick={getCurrentLocation} 
+            variant="outline"
+            disabled={!hasLocationPermission}
+          >
             <MapPin className="h-4 w-4 mr-2" />
             Use Current Location
           </Button>

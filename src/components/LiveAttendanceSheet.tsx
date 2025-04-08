@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { ref, onValue, off, get } from 'firebase/database';
+import { ref, onValue, off } from 'firebase/database';
 import { database, firestore } from '@/lib/firebase';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -8,8 +8,9 @@ import { Badge } from '@/components/ui/badge';
 import { RefreshCcw, UserCheck } from 'lucide-react';
 import { PendingAttendance } from '@/lib/types';
 import { useAuth } from '@/hooks/useAuth';
-import { collection, getDocs, query, where, getDoc, doc } from 'firebase/firestore';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
+import { Button } from '@/components/ui/button';
 
 interface LiveAttendanceSheetProps {
   classId: string;
@@ -22,27 +23,12 @@ const LiveAttendanceSheet: React.FC<LiveAttendanceSheetProps> = ({ classId }) =>
   const { currentUser } = useAuth();
   const { toast } = useToast();
   
-  const checkClassActive = useCallback(async () => {
-    try {
-      if (!classId) {
-        setIsSessionActive(false);
-        return;
-      }
-      
-      // Get real-time class status directly from Firestore
-      const classDoc = await getDoc(doc(firestore, 'classes', classId));
-      
-      if (classDoc.exists()) {
-        const classData = classDoc.data();
-        setIsSessionActive(classData.isActive === true);
-      } else {
-        setIsSessionActive(false);
-      }
-    } catch (error) {
-      console.error('Error checking class status:', error);
-      setIsSessionActive(false);
-    }
-  }, [classId]);
+  // Handle manual refresh
+  const handleRefresh = useCallback(() => {
+    setLoading(true);
+    // The actual data refresh is handled by the listeners
+    setTimeout(() => setLoading(false), 500); // Just show loading indicator briefly
+  }, []);
 
   useEffect(() => {
     if (!classId) {
@@ -53,14 +39,11 @@ const LiveAttendanceSheet: React.FC<LiveAttendanceSheetProps> = ({ classId }) =>
 
     setLoading(true);
     
-    // Check if class is active
-    checkClassActive();
-    
     // Reference to the pending attendance for this class
     const attendanceRef = ref(database, `attendancePending/${classId}`);
     
-    // Listen for real-time updates
-    const unsubscribe = onValue(attendanceRef, (snapshot) => {
+    // Listen for real-time updates from Realtime Database
+    const pendingAttendanceListener = onValue(attendanceRef, (snapshot) => {
       const data = snapshot.val();
       const attendanceList: PendingAttendance[] = [];
       
@@ -78,37 +61,32 @@ const LiveAttendanceSheet: React.FC<LiveAttendanceSheetProps> = ({ classId }) =>
       
       setLiveAttendance(attendanceList);
       setLoading(false);
-      
-      // Recheck class status when attendance data changes
-      checkClassActive();
     }, (error) => {
       console.error('Error loading live attendance:', error);
       setLoading(false);
     });
     
-    // Set up polling to check class status every 10 seconds
-    const intervalId = setInterval(checkClassActive, 10000);
+    // Set up real-time listener for class status changes in Firestore
+    const classDocRef = doc(firestore, 'classes', classId);
+    const classStatusListener = onSnapshot(classDocRef, (doc) => {
+      if (doc.exists()) {
+        const classData = doc.data();
+        setIsSessionActive(classData.isActive === true);
+      } else {
+        setIsSessionActive(false);
+      }
+      setLoading(false);
+    }, (error) => {
+      console.error('Error in class status listener:', error);
+      setLoading(false);
+    });
     
-    // Cleanup listener and interval on unmount
+    // Cleanup listeners on unmount
     return () => {
       off(attendanceRef);
-      clearInterval(intervalId);
+      classStatusListener();
     };
-  }, [classId, checkClassActive]);
-
-  if (loading) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Loading Live Attendance</CardTitle>
-          <CardDescription>Please wait...</CardDescription>
-        </CardHeader>
-        <CardContent className="flex justify-center py-8">
-          <RefreshCcw className="h-8 w-8 animate-spin text-muted-foreground" />
-        </CardContent>
-      </Card>
-    );
-  }
+  }, [classId]);
 
   if (!classId) {
     return (
@@ -121,73 +99,67 @@ const LiveAttendanceSheet: React.FC<LiveAttendanceSheetProps> = ({ classId }) =>
     );
   }
 
-  if (!isSessionActive) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center">
-            <UserCheck className="mr-2 h-5 w-5" /> Attendance Session Ended
-          </CardTitle>
-          <CardDescription>There is no active attendance session</CardDescription>
-        </CardHeader>
-        <CardContent className="text-center py-8">
-          <p className="text-muted-foreground">Attendance has been recorded. Check reports for details.</p>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (liveAttendance.length === 0) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center">
-            <UserCheck className="mr-2 h-5 w-5" /> Live Attendance
-          </CardTitle>
-          <CardDescription>Real-time attendance updates will appear here</CardDescription>
-        </CardHeader>
-        <CardContent className="text-center py-8">
-          <p className="text-muted-foreground">No attendance records yet</p>
-        </CardContent>
-      </Card>
-    );
-  }
-
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center">
-          <UserCheck className="mr-2 h-5 w-5" /> Live Attendance
-        </CardTitle>
-        <CardDescription>
-          Showing {liveAttendance.length} attendance records
-        </CardDescription>
+        <div className="flex justify-between items-center">
+          <div>
+            <CardTitle className="flex items-center">
+              <UserCheck className="mr-2 h-5 w-5" /> 
+              {isSessionActive ? "Live Attendance" : "Attendance Session Ended"}
+            </CardTitle>
+            <CardDescription>
+              {isSessionActive 
+                ? `Showing ${liveAttendance.length} attendance records` 
+                : "There is no active attendance session"}
+            </CardDescription>
+          </div>
+          <Button onClick={handleRefresh} variant="outline" size="sm">
+            <RefreshCcw className="h-4 w-4 mr-2" /> Refresh
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Roll Number</TableHead>
-              <TableHead>Time</TableHead>
-              <TableHead>Status</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {liveAttendance.map((record) => (
-              <TableRow key={record.userId}>
-                <TableCell className="font-medium">{record.name}</TableCell>
-                <TableCell>{record.rollNumber || 'N/A'}</TableCell>
-                <TableCell>{new Date(record.timestamp).toLocaleTimeString()}</TableCell>
-                <TableCell>
-                  <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">
-                    Pending
-                  </Badge>
-                </TableCell>
+        {loading ? (
+          <div className="flex justify-center py-8">
+            <RefreshCcw className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : !isSessionActive ? (
+          <div className="text-center py-8">
+            <p className="text-muted-foreground">Attendance has been recorded. Check reports for details.</p>
+          </div>
+        ) : liveAttendance.length === 0 ? (
+          <div className="text-center py-8">
+            <p className="text-muted-foreground">No attendance records yet</p>
+          </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Roll Number</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Time</TableHead>
+                <TableHead>Status</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {liveAttendance.map((record) => (
+                <TableRow key={record.userId}>
+                  <TableCell className="font-medium">{record.name}</TableCell>
+                  <TableCell>{record.rollNumber || 'N/A'}</TableCell>
+                  <TableCell>{record.email}</TableCell>
+                  <TableCell>{new Date(record.timestamp).toLocaleTimeString()}</TableCell>
+                  <TableCell>
+                    <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">
+                      Pending
+                    </Badge>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
       </CardContent>
     </Card>
   );

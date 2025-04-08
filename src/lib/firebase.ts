@@ -24,6 +24,12 @@ export const auth = getAuth(app);
 export const firestore = getFirestore(app);
 export const database = getDatabase(app);
 
+// Re-export Firebase functions to ensure they're always accessible
+export {
+  doc, getDoc, updateDoc, setDoc, Timestamp, onSnapshot,
+  collection, query, getDocs, where, orderBy, limit
+};
+
 // Helper function to validate email domain
 export const isValidDomain = (email: string): boolean => {
   return (
@@ -74,7 +80,8 @@ export const getAttendanceRecordsForClass = async (classId: string) => {
     // Use a simple query that doesn't require complex indexes
     const attendanceQuery = query(
       collection(firestore, 'attendance'),
-      where('classId', '==', classId)
+      where('classId', '==', classId),
+      limit(100) // Add a limit to ensure we don't fetch too many documents
     );
     
     const snapshot = await getDocs(attendanceQuery);
@@ -87,7 +94,7 @@ export const getAttendanceRecordsForClass = async (classId: string) => {
       });
     });
     
-    // Sort by timestamp
+    // Sort by timestamp client-side to avoid requiring index
     records.sort((a, b) => {
       const timeA = a.timestamp?.toDate?.() || new Date(0);
       const timeB = b.timestamp?.toDate?.() || new Date(0);
@@ -253,125 +260,31 @@ export const resetUserDeviceId = async (userId: string): Promise<boolean> => {
   }
 };
 
-/*
-Firebase Security Configuration Guide:
-1. Firestore Rules:
-```
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    // Allow users to read and write their own profile
-    match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-      allow read: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
-    }
+// Helper function to get attendance records for a specific session
+export const getAttendanceRecordsForSession = async (classId: string, sessionId: string) => {
+  try {
+    const attendanceQuery = query(
+      collection(firestore, 'attendance'),
+      where('classId', '==', classId),
+      where('sessionId', '==', sessionId),
+      limit(100) // Adding a limit to avoid excessive data fetching
+    );
     
-    // Classes rules
-    match /classes/{classId} {
-      // Only admins can create classes
-      allow create: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
-      
-      // Anyone can read classes
-      allow read: if request.auth != null;
-      
-      // Only class creator or admins with password can update/delete
-      allow update, delete: if request.auth != null && (
-        resource.data.createdBy == request.auth.uid || 
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true && 
-         resource.data.password == request.resource.data.password)
-      );
-    }
+    const snapshot = await getDocs(attendanceQuery);
+    const records: any[] = [];
     
-    // Attendance records
-    match /attendance/{recordId} {
-      // Students can only create/read their own attendance records
-      allow create: if request.auth != null && 
-                     recordId.matches(request.auth.uid + "_.+");
-      
-      // Students can read their own attendance
-      // Admins can read all attendance for classes they have access to
-      allow read: if request.auth != null && (
-        recordId.matches(request.auth.uid + "_.+") || 
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true
-      );
-      
-      // Only admins can update/delete attendance records
-      allow update, delete: if request.auth != null && 
-                           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
-    }
+    snapshot.forEach(doc => {
+      records.push({
+        id: doc.id,
+        ...doc.data()
+      });
+    });
     
-    // Settings can only be accessed by admins
-    match /settings/{settingId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && 
-                    get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
-    }
+    return records;
+  } catch (error) {
+    console.error("Error fetching session attendance records:", error);
+    return [];
   }
-}
-```
-
-2. Realtime Database Rules:
-```
-{
-  "rules": {
-    ".read": "auth != null",
-    "attendancePending": {
-      "$classId": {
-        // Create an index on timestamp for faster, ordered queries
-        ".indexOn": ["timestamp"],
-        // Users can only write their own pending attendance
-        ".write": "auth != null",
-        // Admins can read all, users can only read their own
-        ".read": "auth != null"
-      }
-    },
-    "attendanceVerified": {
-      "$classId": {
-        // Create an index on timestamp for faster, ordered queries
-        ".indexOn": ["timestamp"],
-        // Similar rules for verified attendance
-        ".write": "auth != null && (auth.uid == $uid || root.child('users').child(auth.uid).child('isAdmin').val() == true)",
-        ".read": "auth != null"
-      }
-    },
-    "users": {
-      "$uid": {
-        // Users can read/write their own data
-        ".read": "auth != null && auth.uid == $uid",
-        ".write": "auth != null && auth.uid == $uid",
-        // Admin status can only be set by existing admins
-        "isAdmin": {
-          ".write": "auth != null && root.child('users').child(auth.uid).child('isAdmin').val() == true"
-        }
-      }
-    },
-    "classData": {
-      "$classId": {
-        // Only enrolled students and admins with password can access class data
-        ".read": "auth != null && (root.child('users').child(auth.uid).child('isAdmin').val() == true || root.child('classes').child($classId).child('students').child(auth.uid).exists())",
-        ".write": "auth != null && root.child('users').child(auth.uid).child('isAdmin').val() == true"
-      }
-    }
-  }
-}
-```
-
-3. Authentication Rules:
-- Enable Email/Password authentication
-- Set email verification to required for admin features only
-- Configure email templates for verification
-
-4. Realtime Database Structure:
-/attendancePending/{userId} - For pending attendance submissions
-/attendanceVerified/{userId} - For verified attendance records
-/users/{userId} - User profile data including isAdmin flag
-/classData/{classId} - Class-specific dynamic data
-
-5. Firestore Structure:
-/users/{userId} - User profiles
-/classes/{classId} - Class information
-/attendance/{recordId} - Attendance records (format: userId_date_classId)
-/settings/geolocation - Geolocation settings for campus with maxDistance: 300 (meters)
-*/
+};
 
 export default app;

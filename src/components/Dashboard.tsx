@@ -1,19 +1,21 @@
 
 import { useAuth } from '@/hooks/useAuth';
 import { useEffect, useState } from 'react';
-import AttendanceForm from './AttendanceForm';
 import AdminPanel from './ui/adminPanel';
 import EmailVerification from './EmailVerification';
 import ClassManagement from './ClassManagement';
 import { Class } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { AlertCircle, School } from 'lucide-react';
+import { AlertCircle, School, MapPin, RefreshCw } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AttendanceFormWrapper from './AttendanceFormWrapper';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import LiveAttendanceSheet from './LiveAttendanceSheet';
 import ReportIssue from './ReportIssue';
+import LocationPermission from './LocationPermission';
+import { Button } from '@/components/ui/button';
+import { useGeolocation } from '@/hooks/useGeolocation';
 
 const Dashboard = () => {
   const { currentUser, isDeviceVerified } = useAuth();
@@ -21,6 +23,8 @@ const Dashboard = () => {
   const [selectedClass, setSelectedClass] = useState<Class | null>(null);
   const [enrolledClass, setEnrolledClass] = useState<Class | null>(null);
   const [loading, setLoading] = useState(true);
+  const [silentlyRefreshing, setSilentlyRefreshing] = useState(false);
+  const { isWithinCampus, distance, error, requestLocation } = useGeolocation();
 
   useEffect(() => {
     const fetchClasses = async () => {
@@ -29,7 +33,12 @@ const Dashboard = () => {
         return;
       }
       
-      setLoading(true);
+      // Only show loading on first load, not on refresh
+      if (!silentlyRefreshing) {
+        setLoading(true);
+      } else {
+        setSilentlyRefreshing(true);
+      }
       
       try {
         if (currentUser.isAdmin) {
@@ -61,10 +70,19 @@ const Dashboard = () => {
         console.error("Error fetching classes:", err);
       } finally {
         setLoading(false);
+        setSilentlyRefreshing(false);
       }
     };
 
     fetchClasses();
+    
+    // Set up an interval to silently refresh class data
+    const intervalId = setInterval(() => {
+      setSilentlyRefreshing(true);
+      fetchClasses();
+    }, 5000); // Refresh every 5 seconds
+    
+    return () => clearInterval(intervalId);
   }, [currentUser]);
 
   if (!currentUser || !isDeviceVerified) {
@@ -89,10 +107,30 @@ const Dashboard = () => {
                 Selected Class: {selectedClass.name}
               </p>
             )}
+            
+            {!currentUser.isAdmin && (
+              <p className="mt-1 text-sm">
+                <span className={isWithinCampus ? "text-green-600" : "text-red-600"}>
+                  <MapPin className="inline-block h-4 w-4 mr-1" />
+                  {isWithinCampus 
+                    ? "You are within campus boundaries" 
+                    : `You are ${Math.round(distance || 0)}m away from campus`}
+                </span>
+              </p>
+            )}
           </div>
-          {!currentUser.isAdmin && (
-            <div className="mt-2 md:mt-0">
-              <ReportIssue />
+          {!currentUser.isAdmin && selectedClass && (
+            <div className="mt-2 md:mt-0 flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={requestLocation}
+                className="flex items-center gap-1"
+              >
+                <MapPin className="h-4 w-4" />
+                Update Location
+              </Button>
+              <ReportIssue classId={selectedClass.id} />
             </div>
           )}
         </div>
@@ -101,7 +139,18 @@ const Dashboard = () => {
       {/* Email verification notice for admins only */}
       {currentUser.isAdmin && !currentUser.emailVerified && <EmailVerification />}
 
-      {currentUser.isAdmin ? (
+      {/* Only show loading spinner on initial load, not during silent refreshes */}
+      {loading && !silentlyRefreshing ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Loading...</CardTitle>
+            <CardDescription>Please wait while we load your dashboard</CardDescription>
+          </CardHeader>
+          <CardContent className="flex justify-center py-8">
+            <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
+          </CardContent>
+        </Card>
+      ) : currentUser.isAdmin ? (
         <Tabs defaultValue={selectedTab} onValueChange={setSelectedTab} className="w-full">
           <TabsList className="w-full mb-4">
             {selectedClass && (
@@ -168,6 +217,8 @@ const Dashboard = () => {
             </TabsList>
             
             <TabsContent value="attendance">
+              <LocationPermission />
+              
               <Card className="mb-6">
                 <CardHeader>
                   <CardTitle className="flex items-center">
@@ -180,17 +231,51 @@ const Dashboard = () => {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="bg-blue-50 border border-blue-100 p-4 rounded-md">
-                    <div className="flex">
-                      <AlertCircle className="text-blue-500 h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-blue-700 font-medium">Location Verification</p>
-                        <p className="text-sm text-blue-600">
-                          Make sure you're physically present on campus when marking attendance.
-                          Your location will be verified through the system.
-                        </p>
+                  <div className="space-y-4">
+                    <div className="bg-blue-50 border border-blue-100 p-4 rounded-md">
+                      <div className="flex">
+                        <AlertCircle className="text-blue-500 h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-blue-700 font-medium">Location Verification</p>
+                          <p className="text-sm text-blue-600">
+                            Make sure you're physically present on campus when marking attendance.
+                            Your location will be verified through the system.
+                          </p>
+                        </div>
                       </div>
                     </div>
+                    
+                    <div className={`p-4 rounded-md ${isWithinCampus ? 'bg-green-50 border border-green-100' : 'bg-red-50 border border-red-100'}`}>
+                      <div className="flex">
+                        <MapPin className={`h-5 w-5 mr-2 flex-shrink-0 mt-0.5 ${isWithinCampus ? 'text-green-500' : 'text-red-500'}`} />
+                        <div>
+                          <p className={`font-medium ${isWithinCampus ? 'text-green-700' : 'text-red-700'}`}>
+                            {isWithinCampus 
+                              ? "You are within campus boundaries" 
+                              : `You are ${Math.round(distance || 0)}m away from campus`}
+                          </p>
+                          {!isWithinCampus && (
+                            <p className="text-sm text-red-600 mt-1">
+                              You need to be within campus boundaries to mark attendance.
+                            </p>
+                          )}
+                          {error && (
+                            <p className="text-sm text-red-600 mt-1">
+                              Error: {error}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <Button 
+                      onClick={requestLocation}
+                      className="w-full"
+                      variant="outline"
+                    >
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Update My Location
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
