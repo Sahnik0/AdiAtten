@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -139,7 +138,9 @@ const LoginForm = () => {
           <TabsContent value="register">
             <form onSubmit={handleRegister} className="space-y-4">
               <div className="grid gap-2">
-                <Label htmlFor="register-email">Email</Label>
+                <Label htmlFor="register-email">
+                  Email <span className="text-red-500">*</span>
+                </Label>
                 <Input 
                   id="register-email"
                   type="email" 
@@ -152,7 +153,9 @@ const LoginForm = () => {
               </div>
               
               <div className="grid gap-2">
-                <Label htmlFor="display-name">Full Name</Label>
+                <Label htmlFor="display-name">
+                  Full Name <span className="text-red-500">*</span>
+                </Label>
                 <Input 
                   id="display-name"
                   type="text" 
@@ -164,11 +167,13 @@ const LoginForm = () => {
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="roll-number">Roll Number</Label>
+                <Label htmlFor="roll-number">
+                  Roll Number <span className="text-red-500">*</span>
+                </Label>
                 <Input 
                   id="roll-number"
                   type="text" 
-                  placeholder="Your Roll Number" 
+                  placeholder="Your Roll Number eg.88" 
                   value={rollNumber}
                   onChange={(e) => setRollNumber(e.target.value)}
                   required
@@ -176,7 +181,9 @@ const LoginForm = () => {
               </div>
               
               <div className="grid gap-2">
-                <Label htmlFor="register-password">Password</Label>
+                <Label htmlFor="register-password">
+                  Password <span className="text-red-500">*</span>
+                </Label>
                 <Input 
                   id="register-password"
                   type="password" 
@@ -212,6 +219,10 @@ const LoginForm = () => {
                   </>
                 )}
               </Button>
+              
+              <p className="text-xs text-center text-muted-foreground mt-2">
+                Fields marked with <span className="text-red-500">*</span> are required
+              </p>
             </form>
           </TabsContent>
         </Tabs>
