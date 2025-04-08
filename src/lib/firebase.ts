@@ -288,3 +288,13 @@ export const getAttendanceRecordsForSession = async (classId: string, sessionId:
 };
 
 export default app;
+
+async function updateDoc(classRef: DocumentReference<DocumentData, DocumentData>, data: { 
+  isActive: boolean; 
+  startTime?: Timestamp; 
+  currentSessionId?: string;
+  endTime?: Timestamp;
+  lastSessionId?: string;
+}) {
+  return firestoreUpdateDoc(classRef, data);
+}

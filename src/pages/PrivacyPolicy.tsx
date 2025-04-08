@@ -31,7 +31,7 @@ const PrivacyPolicy = () => {
                 
                 <h2>1. Introduction</h2>
                 <p>
-                  Welcome to Campus Guard Attendance System. We respect your privacy and are committed 
+                  Welcome to AdiAtten Attendance System. We respect your privacy and are committed 
                   to protecting your personal data. This privacy policy explains how we collect, use, 
                   process, and protect your personal information.
                 </p>
@@ -104,7 +104,7 @@ const PrivacyPolicy = () => {
                 <h2>10. Contact Us</h2>
                 <p>
                   If you have any questions about this privacy policy or our data practices, please 
-                  contact us at privacy@campusguard.edu.
+                  contact us at sahnik.biswas@stu.adamasuniversity.ac.in
                 </p>
               </CardContent>
             </Card>

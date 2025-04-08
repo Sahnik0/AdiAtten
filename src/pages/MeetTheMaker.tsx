@@ -41,7 +41,7 @@ const MeetTheMaker = () => {
                   <div className="w-full md:w-2/3">
                     <h2>About the Developer</h2>
                     <p>
-                      Campus Guard Attendance System was developed by a team of passionate educators and developers 
+                      AdiAtten System was developed by a team of passionate educators and developers 
                       from Adamas University, with the goal of creating a secure and efficient attendance tracking 
                       solution for educational institutions.
                     </p>
@@ -63,8 +63,8 @@ const MeetTheMaker = () => {
                     
                     <h3>Contact</h3>
                     <p>
-                      For any inquiries or suggestions regarding the Campus Guard Attendance System, 
-                      please reach out to us at support@campusguard.edu.
+                      For any inquiries or suggestions regarding the AdiAtten Attendance System, 
+                      please reach out to us at sahnik.biswas@stu.adamasuniversity.ac.in
                     </p>
                   </div>
                 </div>

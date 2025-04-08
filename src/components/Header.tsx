@@ -19,7 +19,7 @@ const Header = () => {
             </Button>
           )}
           <h1 className="text-xl font-bold gradient-text bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-cyan-500">
-            Campus Guard
+            AdiAtten
           </h1>
         </div>
         
