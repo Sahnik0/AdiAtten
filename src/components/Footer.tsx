@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Link } from 'react-router-dom';
 
@@ -20,7 +19,7 @@ const Footer = () => {
             Meet the Maker
           </Link>
           <Link to="/" className="text-sm text-muted-foreground hover:text-primary transition-colors">
-            Help
+            Home
           </Link>
         </div>
       </div>

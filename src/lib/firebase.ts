@@ -1,9 +1,9 @@
 
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore, doc, getDoc, DocumentData, DocumentReference } from "firebase/firestore";
+import { getFirestore, doc, getDoc, setDoc, DocumentData, DocumentReference, onSnapshot } from "firebase/firestore";
 import { getDatabase } from "firebase/database";
-import { collection, query, getDocs, where } from "firebase/firestore";
+import { collection, query, getDocs, where, orderBy } from "firebase/firestore";
 import { updateDoc as firestoreUpdateDoc, Timestamp } from 'firebase/firestore';
 
 // Firebase configuration
@@ -298,3 +298,7 @@ async function updateDoc(classRef: DocumentReference<DocumentData, DocumentData>
 }) {
   return firestoreUpdateDoc(classRef, data);
 }
+function limit(arg0: number): import("@firebase/firestore").QueryConstraint {
+  throw new Error("Function not implemented.");
+}
+
