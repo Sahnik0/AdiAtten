@@ -1,8 +1,7 @@
-
 import React from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
-import { LogOut, Menu } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 
 const Header = () => {
@@ -13,11 +12,6 @@ const Header = () => {
     <header className="w-full bg-white shadow-sm py-3 px-4">
       <div className="container max-w-6xl mx-auto flex items-center justify-between">
         <div className="flex items-center">
-          {isMobile && (
-            <Button variant="ghost" size="icon" className="mr-2">
-              <Menu className="h-5 w-5" />
-            </Button>
-          )}
           <h1 className="text-xl font-bold gradient-text bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-cyan-500">
             AdiAtten
           </h1>
