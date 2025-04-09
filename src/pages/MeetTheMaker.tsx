@@ -73,11 +73,11 @@ const MeetTheMaker = () => {
                 <div className="mt-4 space-y-2">
                   <h3 className="text-lg font-medium text-gray-800">Connect with me</h3>
                   <div className="flex flex-col space-y-3">
-                    <SocialLink icon={Github} href="https://github.com/sahnikbiswas" label="GitHub" />
-                    <SocialLink icon={Linkedin} href="https://linkedin.com/in/sahnikbiswas" label="LinkedIn" />
+                    <SocialLink icon={Github} href="https://github.com/Sahnik0" label="GitHub" />
+                    <SocialLink icon={Linkedin} href="https://linkedin.com/in/sahnik-biswas" label="LinkedIn" />
                     <SocialLink icon={Twitter} href="https://twitter.com/sahnikbiswas" label="Twitter" />
                     <SocialLink icon={Mail} href="mailto:sahnik.biswas@stu.adamasuniversity.ac.in" label="Email" />
-                    <SocialLink icon={ExternalLink} href="https://sahnikbiswas.com" label="Portfolio" />
+                    <SocialLink icon={ExternalLink} href="https://sahnik.tech" label="Portfolio" />
                   </div>
                 </div>
               </div>
