@@ -724,6 +724,46 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onClassSelect }) => {
     }
   };
 
+  // Remove user as admin (admin only)
+  const removeUserAsAdmin = async (studentId: string, studentEmail: string) => {
+    if (!currentUser || !currentUser.isAdmin) return;
+    
+    try {
+      const userRef = doc(firestore, 'users', studentId);
+      
+      // Confirm with user
+      if (!window.confirm(`Are you sure you want to remove admin privileges from ${studentEmail}?`)) {
+        return;
+      }
+      
+      await updateDoc(userRef, {
+        isAdmin: false
+      });
+      
+      toast({
+        title: "Admin Status Removed",
+        description: `${studentEmail} is no longer an admin.`,
+      });
+      
+      // Update local user details
+      const updatedUserDetails = {...userDetails};
+      if (updatedUserDetails[studentId]) {
+        updatedUserDetails[studentId] = {
+          ...updatedUserDetails[studentId],
+          isAdmin: false
+        };
+        setUserDetails(updatedUserDetails);
+      }
+    } catch (error) {
+      console.error("Error removing admin status:", error);
+      toast({
+        title: "Error",
+        description: "Failed to remove admin privileges.",
+        variant: "destructive",
+      });
+    }
+  };
+
   // Filter classes based on search query
   const filteredClasses = allClasses.filter(
     cls => cls.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -1052,7 +1092,28 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onClassSelect }) => {
                                           Reset Device
                                         </Button>
                                         
-                                        {!isUserAdmin && (
+                                        {isUserAdmin ? (
+                                          <Button 
+                                            size="sm"
+                                            variant="outline"
+                                            className="flex items-center text-red-600 hover:text-red-700 transition-all duration-200 active:scale-95 hover:bg-red-50"
+                                            onClick={(e) => {
+                                              // Animation code
+                                              const button = e.currentTarget;
+                                              button.classList.add('scale-95');
+                                              button.classList.add('bg-red-100');
+                                              setTimeout(() => {
+                                                button.classList.remove('scale-95');
+                                                button.classList.remove('bg-red-100');
+                                              }, 300);
+                                              
+                                              removeUserAsAdmin(studentId, studentEmail);
+                                            }}
+                                          >
+                                            <UserPlus className="h-3 w-3 mr-1" />
+                                            Remove Admin
+                                          </Button>
+                                        ) : (
                                           <Button 
                                             size="sm"
                                             variant="outline"
