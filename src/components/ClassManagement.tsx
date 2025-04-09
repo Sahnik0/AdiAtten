@@ -867,13 +867,7 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onClassSelect }) => {
                         </div>
                         <div className="space-x-2">
                           {cls.isActive ? (
-                            <Button 
-                              variant="destructive" 
-                              onClick={() => endAttendance(cls.id)}
-                              className="flex items-center"
-                            >
-                              <Clock className="mr-2 h-4 w-4" /> End Attendance
-                            </Button>
+                            <></>
                           ) : (
                             <Dialog open={startAttendanceOpen} onOpenChange={setStartAttendanceOpen}>
                               <DialogTrigger asChild>
