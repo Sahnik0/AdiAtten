@@ -36,7 +36,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { AlertCircle, Clock, Plus, RefreshCcw, Users, Lock, Check, X, Search } from 'lucide-react';
+import { AlertCircle, Clock, Plus, RefreshCcw, Users, Lock, Check, X, Search, Smartphone } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 interface ClassManagementProps {
@@ -650,6 +650,40 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onClassSelect }) => {
     }
   };
 
+  // Reset device ID (admin only)
+  const resetDeviceId = async (studentId: string, studentEmail: string) => {
+    if (!currentUser || !currentUser.isAdmin) return;
+    
+    try {
+      const userRef = doc(firestore, 'users', studentId);
+      await updateDoc(userRef, {
+        deviceId: null
+      });
+      
+      toast({
+        title: "Device Reset",
+        description: `Device ID for ${studentEmail || studentId} has been reset successfully.`,
+      });
+      
+      // Refresh user details to show updated status
+      const updatedUserDetails = {...userDetails};
+      if (updatedUserDetails[studentId]) {
+        updatedUserDetails[studentId] = {
+          ...updatedUserDetails[studentId],
+          deviceId: null
+        };
+        setUserDetails(updatedUserDetails);
+      }
+    } catch (error) {
+      console.error("Error resetting device ID:", error);
+      toast({
+        title: "Error",
+        description: "Failed to reset user's device ID.",
+        variant: "destructive",
+      });
+    }
+  };
+
   // Filter classes based on search query
   const filteredClasses = allClasses.filter(
     cls => cls.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -933,21 +967,34 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onClassSelect }) => {
                                 <TableRow>
                                   <TableHead>Student Email</TableHead>
                                   <TableHead>Status</TableHead>
+                                  <TableHead>Actions</TableHead>
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
-                                {cls.students.map(studentId => (
-                                  <TableRow key={studentId}>
-                                    <TableCell>
-                                      {userDetails[studentId]?.email || studentId}
-                                    </TableCell>
-                                    <TableCell>
-                                      <Badge variant="outline" className="bg-green-50 text-green-700">
-                                        Enrolled
-                                      </Badge>
-                                    </TableCell>
-                                  </TableRow>
-                                ))}
+                                {cls.students.map(studentId => {
+                                  const studentEmail = userDetails[studentId]?.email || studentId;
+                                  return (
+                                    <TableRow key={studentId}>
+                                      <TableCell>{studentEmail}</TableCell>
+                                      <TableCell>
+                                        <Badge variant="outline" className="bg-green-50 text-green-700">
+                                          Enrolled
+                                        </Badge>
+                                      </TableCell>
+                                      <TableCell>
+                                        <Button 
+                                          size="sm"
+                                          variant="outline"
+                                          className="flex items-center text-orange-600 hover:text-orange-700 transition-all duration-200 active:scale-95 hover:bg-orange-50"
+                                          onClick={() => resetDeviceId(studentId, studentEmail)}
+                                        >
+                                          <Smartphone className="h-3 w-3 mr-1" />
+                                          Reset Device
+                                        </Button>
+                                      </TableCell>
+                                    </TableRow>
+                                  );
+                                })}
                               </TableBody>
                             </Table>
                           </div>

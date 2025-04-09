@@ -257,27 +257,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
     }
   };
 
-  const resetDeviceId = async (userId: string) => {
-    try {
-      const userRef = doc(firestore, 'users', userId);
-      await updateDoc(userRef, {
-        deviceId: null
-      });
-      
-      toast({
-        title: "Device Reset",
-        description: "User device ID has been reset. They can now login from a new device.",
-      });
-    } catch (error) {
-      console.error("Error resetting device ID:", error);
-      toast({
-        title: "Error",
-        description: "Failed to reset user device ID.",
-        variant: "destructive",
-      });
-    }
-  };
-  
   const exportAttendanceToCsv = () => {
     if (attendanceHistory.length === 0) {
       toast({
@@ -548,7 +527,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
                                     <th className="px-4 py-2 text-left font-medium">Name</th>
                                     <th className="px-4 py-2 text-left font-medium">Roll Number</th>
                                     <th className="px-4 py-2 text-left font-medium">Status</th>
-                                    <th className="px-4 py-2 text-left font-medium">Actions</th>
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -564,16 +542,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
                                         }`}>
                                           {record.verified ? 'Present' : 'Absent'}
                                         </span>
-                                      </td>
-                                      <td className="px-4 py-2">
-                                        <Button 
-                                          variant="ghost" 
-                                          size="sm"
-                                          onClick={() => resetDeviceId(record.userId)}
-                                          title="Reset Device ID"
-                                        >
-                                          <RefreshCcw className="h-4 w-4" />
-                                        </Button>
                                       </td>
                                     </tr>
                                   ))}
