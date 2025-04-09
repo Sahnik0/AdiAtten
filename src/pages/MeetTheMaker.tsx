@@ -75,7 +75,7 @@ const MeetTheMaker = () => {
                   <div className="flex flex-col space-y-3">
                     <SocialLink icon={Github} href="https://github.com/Sahnik0" label="GitHub" />
                     <SocialLink icon={Linkedin} href="https://linkedin.com/in/sahnik-biswas" label="LinkedIn" />
-                    <SocialLink icon={Twitter} href="https://twitter.com/sahnikbiswas" label="Twitter" />
+                    <SocialLink icon={Twitter} href="https://twitter.com/sahnik_biswas" label="Twitter" />
                     <SocialLink icon={Mail} href="mailto:sahnik.biswas@stu.adamasuniversity.ac.in" label="Email" />
                     <SocialLink icon={ExternalLink} href="https://sahnik.tech" label="Portfolio" />
                   </div>
@@ -140,7 +140,7 @@ const MeetTheMaker = () => {
                     <div>
                       <h3 className="text-lg font-semibold text-cyan-700">Technologies Used</h3>
                       <p className="mt-1">
-                        AdiAtten is built using React, Node.js, and MongoDB, with emphasis on security and user experience.
+                        AdiAtten is built using TypeScript, TailwindCss and firebase with emphasis on security and user experience.
                         The frontend utilizes modern React patterns and component libraries to create an intuitive interface.
                       </p>
                     </div>
