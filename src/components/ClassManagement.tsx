@@ -56,6 +56,7 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onClassSelect }) => {
   const [adminAccessPassword, setAdminAccessPassword] = useState('');
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [selectedAdminClass, setSelectedAdminClass] = useState<Class | null>(null);
+  const [userDetails, setUserDetails] = useState<Record<string, any>>({});
   
   // Form states
   const [newClassName, setNewClassName] = useState('');
@@ -80,6 +81,38 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onClassSelect }) => {
       }
     }
   }, [currentUser]);
+
+  // Fetch user details
+  const fetchUserDetails = async (userIds: string[]) => {
+    if (!userIds.length) return;
+    
+    try {
+      const uniqueIds = [...new Set(userIds)]; // Remove duplicates
+      const userDetailsMap: Record<string, any> = {};
+      
+      // Fetch user details in batches to avoid too many parallel requests
+      const batchSize = 10;
+      for (let i = 0; i < uniqueIds.length; i += batchSize) {
+        const batch = uniqueIds.slice(i, i + batchSize);
+        const promises = batch.map(userId => 
+          getDoc(doc(firestore, 'users', userId))
+            .then(doc => {
+              if (doc.exists()) {
+                userDetailsMap[userId] = doc.data();
+              } else {
+                userDetailsMap[userId] = { email: 'Unknown email' };
+              }
+            })
+        );
+        
+        await Promise.all(promises);
+      }
+      
+      setUserDetails(userDetailsMap);
+    } catch (error) {
+      console.error("Error fetching user details:", error);
+    }
+  };
 
   // Fetch all classes
   const fetchClasses = async () => {
@@ -178,6 +211,19 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onClassSelect }) => {
   useEffect(() => {
     fetchClasses();
   }, [currentUser, selectedClassId]);
+
+  useEffect(() => {
+    if (selectedClassId && classes.length > 0) {
+      const selectedClass = classes.find(c => c.id === selectedClassId);
+      if (selectedClass) {
+        const allUserIds = [
+          ...(selectedClass.students || []),
+          ...(selectedClass.pendingStudents || [])
+        ];
+        fetchUserDetails(allUserIds);
+      }
+    }
+  }, [classes, selectedClassId]);
 
   // Create a new class (admin only)
   const createClass = async () => {
@@ -891,14 +937,16 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onClassSelect }) => {
                             <Table>
                               <TableHeader>
                                 <TableRow>
-                                  <TableHead>Student ID</TableHead>
+                                  <TableHead>Student Email</TableHead>
                                   <TableHead>Status</TableHead>
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
                                 {cls.students.map(studentId => (
                                   <TableRow key={studentId}>
-                                    <TableCell>{studentId}</TableCell>
+                                    <TableCell>
+                                      {userDetails[studentId]?.email || studentId}
+                                    </TableCell>
                                     <TableCell>
                                       <Badge variant="outline" className="bg-green-50 text-green-700">
                                         Enrolled
@@ -921,7 +969,7 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onClassSelect }) => {
                           <div className="space-y-2">
                             {cls.pendingStudents.map(studentId => (
                               <div key={studentId} className="flex items-center justify-between bg-muted p-2 rounded-md">
-                                <span className="text-sm">{studentId}</span>
+                                <span className="text-sm">{userDetails[studentId]?.email || studentId}</span>
                                 <div className="space-x-2">
                                   <Button 
                                     size="sm"
