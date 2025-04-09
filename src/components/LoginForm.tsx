@@ -328,11 +328,21 @@ const LoginForm = () => {
                     <Input 
                       id="roll-number"
                       type="text" 
-                      placeholder="Your Roll Number eg.88" 
+                      placeholder="Your Roll Number eg. 88" 
                       value={rollNumber}
-                      onChange={(e) => setRollNumber(e.target.value)}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        // Only allow numeric input and limit to 3 digits
+                        if (/^\d{0,3}$/.test(value)) {
+                          setRollNumber(value);
+                        }
+                      }}
                       required
+                      maxLength={3}
                     />
+                    <p className="text-xs text-muted-foreground">
+                      Enter only the last 3 digits of your roll number (e.g. for UG/02/BTCSE/2023/088, enter 88)
+                    </p>
                   </div>
                   
                   <div className="grid gap-2">
