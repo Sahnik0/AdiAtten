@@ -137,7 +137,7 @@ const LoginForm = () => {
         
         <CardHeader>
           <div className="text-center">
-            <CardTitle className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 text-transparent bg-clip-text inline-block">
+            <CardTitle className="text-2xl font-bold bg-gradient-to-r from-gray-700 to-gray-900 text-transparent bg-clip-text inline-block">
               Campus Attendance
             </CardTitle>
           </div>
@@ -173,13 +173,13 @@ const LoginForm = () => {
               <TabsTrigger value="signin" className="relative">
                 Sign In
                 {activeTab === 'signin' && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600" />
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gray-600" />
                 )}
               </TabsTrigger>
               <TabsTrigger value="register" className="relative">
                 Register
                 {activeTab === 'register' && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600" />
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gray-600" />
                 )}
               </TabsTrigger>
             </TabsList>
@@ -256,7 +256,7 @@ const LoginForm = () => {
                   <div className="transition-transform duration-200 hover:scale-[1.02] active:scale-[0.98]">
                     <Button 
                       type="submit"
-                      className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:shadow-lg transition-all text-white"
+                      className="w-full bg-gradient-to-r from-gray-600 to-gray-800 hover:shadow-lg transition-all text-white"
                       disabled={isLoading}
                     >
                       {isLoading ? (
@@ -399,7 +399,7 @@ const LoginForm = () => {
                   <div className="transition-transform duration-200 hover:scale-[1.02] active:scale-[0.98]">
                     <Button 
                       type="submit"
-                      className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:shadow-lg transition-all text-white" 
+                      className="w-full bg-gradient-to-r from-gray-600 to-gray-800 hover:shadow-lg transition-all text-white" 
                       disabled={isLoading}
                     >
                       {isLoading ? (
@@ -425,8 +425,8 @@ const LoginForm = () => {
           </Tabs>
 
           <div className="flex flex-col items-center justify-center space-y-2 mt-6 transition-opacity duration-300">
-            <div className="rounded-full bg-blue-100 p-3 transition-transform duration-300 hover:scale-110 hover:rotate-6">
-              <KeyRound className="h-6 w-6 text-blue-600" />
+            <div className="rounded-full bg-gray-100 p-3 transition-transform duration-300 hover:scale-110 hover:rotate-6">
+              <KeyRound className="h-6 w-6 text-gray-600" />
             </div>
             
             <p className="text-center text-muted-foreground text-sm">

@@ -1,11 +1,11 @@
-
 import React, { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
-import { Mail, ArrowLeft, RefreshCw } from 'lucide-react';
+import { Mail, ArrowLeft, RefreshCw, AlertCircle, CheckCircle } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface ForgotPasswordProps {
   onBack: () => void;
@@ -14,13 +14,32 @@ interface ForgotPasswordProps {
 const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack }) => {
   const [email, setEmail] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [notification, setNotification] = useState<{ type: 'success' | 'error' | null; message: string }>({ 
+    type: null, 
+    message: '' 
+  });
   const { resetPassword } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    await resetPassword(email);
-    setIsSubmitting(false);
+    setNotification({ type: null, message: '' });
+    
+    try {
+      await resetPassword(email);
+      setNotification({ 
+        type: 'success', 
+        message: 'Password reset email sent! Check your inbox (and spam folder).' 
+      });
+      // Don't clear the email so users can see what email they used
+    } catch (error) {
+      setNotification({ 
+        type: 'error', 
+        message: error.message || 'Failed to send reset email. Please try again.' 
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -33,6 +52,19 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack }) => {
       </CardHeader>
       
       <CardContent className="space-y-4">
+        {notification.type && (
+          <Alert className={notification.type === 'success' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}>
+            <AlertDescription className={`flex items-center ${notification.type === 'success' ? 'text-green-800' : 'text-red-800'}`}>
+              {notification.type === 'success' ? (
+                <CheckCircle className="h-4 w-4 mr-2" />
+              ) : (
+                <AlertCircle className="h-4 w-4 mr-2" />
+              )}
+              {notification.message}
+            </AlertDescription>
+          </Alert>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid gap-2">
             <Label htmlFor="email">Email</Label>
@@ -50,7 +82,7 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack }) => {
           
           <Button 
             type="submit"
-            className="w-full gradient-bg hover:shadow-lg transition-all"
+            className="w-full bg-gradient-to-r from-gray-600 to-gray-800 hover:shadow-lg transition-all text-white"
             disabled={isSubmitting}
           >
             {isSubmitting ? (
