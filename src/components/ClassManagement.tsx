@@ -36,7 +36,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { AlertCircle, Clock, Plus, RefreshCcw, Users, Lock, Check, X, Search, Smartphone } from 'lucide-react';
+import { AlertCircle, Clock, Plus, RefreshCcw, Users, Lock, Check, X, Search, Smartphone, UserPlus } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 interface ClassManagementProps {
@@ -684,6 +684,46 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onClassSelect }) => {
     }
   };
 
+  // Set user as admin (admin only)
+  const setUserAsAdmin = async (studentId: string, studentEmail: string) => {
+    if (!currentUser || !currentUser.isAdmin) return;
+    
+    try {
+      const userRef = doc(firestore, 'users', studentId);
+      
+      // Confirm with user
+      if (!window.confirm(`Are you sure you want to set ${studentEmail} as an admin? This will give them full access to manage all classes and attendance.`)) {
+        return;
+      }
+      
+      await updateDoc(userRef, {
+        isAdmin: true
+      });
+      
+      toast({
+        title: "Admin Status Granted",
+        description: `${studentEmail} has been promoted to admin status.`,
+      });
+      
+      // Update local user details
+      const updatedUserDetails = {...userDetails};
+      if (updatedUserDetails[studentId]) {
+        updatedUserDetails[studentId] = {
+          ...updatedUserDetails[studentId],
+          isAdmin: true
+        };
+        setUserDetails(updatedUserDetails);
+      }
+    } catch (error) {
+      console.error("Error setting user as admin:", error);
+      toast({
+        title: "Error",
+        description: "Failed to grant admin permissions.",
+        variant: "destructive",
+      });
+    }
+  };
+
   // Filter classes based on search query
   const filteredClasses = allClasses.filter(
     cls => cls.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -973,24 +1013,67 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onClassSelect }) => {
                               <TableBody>
                                 {cls.students.map(studentId => {
                                   const studentEmail = userDetails[studentId]?.email || studentId;
+                                  const isUserAdmin = userDetails[studentId]?.isAdmin === true;
+                                  
                                   return (
                                     <TableRow key={studentId}>
                                       <TableCell>{studentEmail}</TableCell>
                                       <TableCell>
-                                        <Badge variant="outline" className="bg-green-50 text-green-700">
-                                          Enrolled
-                                        </Badge>
+                                        <div className="flex items-center space-x-2">
+                                          <Badge variant="outline" className="bg-green-50 text-green-700">
+                                            Enrolled
+                                          </Badge>
+                                          {isUserAdmin && (
+                                            <Badge variant="outline" className="bg-blue-50 text-blue-700">
+                                              Admin
+                                            </Badge>
+                                          )}
+                                        </div>
                                       </TableCell>
-                                      <TableCell>
+                                      <TableCell className="flex items-center space-x-2">
                                         <Button 
                                           size="sm"
                                           variant="outline"
                                           className="flex items-center text-orange-600 hover:text-orange-700 transition-all duration-200 active:scale-95 hover:bg-orange-50"
-                                          onClick={() => resetDeviceId(studentId, studentEmail)}
+                                          onClick={(e) => {
+                                            // Animation code
+                                            const button = e.currentTarget;
+                                            button.classList.add('scale-95');
+                                            button.classList.add('bg-orange-100');
+                                            setTimeout(() => {
+                                              button.classList.remove('scale-95');
+                                              button.classList.remove('bg-orange-100');
+                                            }, 300);
+                                            
+                                            resetDeviceId(studentId, studentEmail);
+                                          }}
                                         >
                                           <Smartphone className="h-3 w-3 mr-1" />
                                           Reset Device
                                         </Button>
+                                        
+                                        {!isUserAdmin && (
+                                          <Button 
+                                            size="sm"
+                                            variant="outline"
+                                            className="flex items-center text-blue-600 hover:text-blue-700 transition-all duration-200 active:scale-95 hover:bg-blue-50"
+                                            onClick={(e) => {
+                                              // Animation code
+                                              const button = e.currentTarget;
+                                              button.classList.add('scale-95');
+                                              button.classList.add('bg-blue-100');
+                                              setTimeout(() => {
+                                                button.classList.remove('scale-95');
+                                                button.classList.remove('bg-blue-100');
+                                              }, 300);
+                                              
+                                              setUserAsAdmin(studentId, studentEmail);
+                                            }}
+                                          >
+                                            <UserPlus className="h-3 w-3 mr-1" />
+                                            Set as Admin
+                                          </Button>
+                                        )}
                                       </TableCell>
                                     </TableRow>
                                   );
