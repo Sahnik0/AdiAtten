@@ -1,6 +1,6 @@
 import { useAuth } from '@/hooks/useAuth';
 import { useEffect, useState } from 'react';
-import AdminPanel from './ui/AdminPanel';
+import AdminPanel from './adminPanel';
 import EmailVerification from './EmailVerification';
 import ClassManagement from './ClassManagement';
 import { Class } from '@/lib/types';
