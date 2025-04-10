@@ -1465,24 +1465,3 @@ const signIn = async (email: string, password: string) => {
 };
 
 export default ClassManagement;
-async function signInWithEmailAndPassword(auth: any, email: string, password: string) {
-  try {
-    // Call Firebase's authentication method
-    const result = await auth.signInWithEmailAndPassword(email, password);
-    return result;
-  } catch (error: any) {
-    // Handle common Firebase auth errors
-    switch (error.code) {
-      case 'auth/invalid-email':
-        throw new Error('Invalid email address format.');
-      case 'auth/user-disabled':
-        throw new Error('This account has been disabled.');
-      case 'auth/user-not-found':
-        throw new Error('No account found with this email.');
-      case 'auth/wrong-password':
-        throw new Error('Incorrect password.');
-      default:
-        throw new Error('Failed to sign in. Please try again.');
-    }
-  }
-}
