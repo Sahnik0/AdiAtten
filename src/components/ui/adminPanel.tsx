@@ -9,10 +9,11 @@ import { collection, getDocs, query, where, doc, updateDoc, setDoc, serverTimest
 import { firestore, database } from '@/lib/firebase';
 import { AttendanceRecord } from '@/lib/types';
 import { Button } from '@/components/ui/button';
-import { Download, History, ClipboardCopy, Settings, RefreshCcw, Power, Play } from 'lucide-react';
+import { Download, History, ClipboardCopy, Settings, RefreshCcw, Power, Play, Search, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import GeolocationSettings from '@/components/GeolocationSettings';
 import { ref, remove, get } from 'firebase/database';
+import { Input } from '@/components/ui/input';
 
 interface AdminPanelProps {
   selectedClass: Class;
@@ -25,6 +26,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
   const [endingSession, setEndingSession] = useState(false);
   const [startingSession, setStartingSession] = useState(false);
   const [classData, setClassData] = useState<Class | null>(null);
+  const [sessionSearchQueries, setSessionSearchQueries] = useState<Record<string, string>>({});
   const { toast } = useToast();
   
   useEffect(() => {
@@ -382,6 +384,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
       });
   };
 
+  const updateSessionSearch = (sessionId: string, query: string) => {
+    setSessionSearchQueries(prev => ({
+      ...prev,
+      [sessionId]: query
+    }));
+  };
+
   if (!selectedClass || !currentUser?.isAdmin) {
     return (
       <Card>
@@ -484,74 +493,127 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
                   <div className="space-y-4">
                     <h3 className="font-medium text-lg">Attendance History</h3>
                     
-                    {Object.entries(attendanceHistory.reduce((acc, record) => {
-                      const sessionId = record.sessionId || 'unknown';
-                      if (!acc[sessionId]) {
-                        acc[sessionId] = [];
-                      }
-                      acc[sessionId].push(record);
-                      return acc;
-                    }, {} as Record<string, AttendanceRecord[]>))
-                    .sort(([sessionIdA], [sessionIdB]) => sessionIdB.localeCompare(sessionIdA))
-                    .map(([sessionId, records]) => {
-                      const sessionDate = records[0]?.date || 'Unknown';
-                      const presentCount = records.filter(r => r.verified).length;
-                      const totalCount = records.length;
-                      
-                      return (
-                        <Card key={sessionId} className="mb-4">
-                          <CardHeader className="pb-2">
-                            <div className="flex justify-between items-center">
-                              <div>
-                                <CardTitle className="text-base">
-                                  Session: {sessionDate}
-                                </CardTitle>
-                                <CardDescription>
-                                  Present: {presentCount}/{totalCount} ({Math.round((presentCount/totalCount) * 100)}%)
-                                </CardDescription>
+                    {/* Fixed height container with scroll */}
+                    <div className="max-h-[700px] overflow-y-auto pr-2 pb-2 custom-scrollbar">
+                      {Object.entries(attendanceHistory.reduce((acc, record) => {
+                        const sessionId = record.sessionId || 'unknown';
+                        if (!acc[sessionId]) {
+                          acc[sessionId] = [];
+                        }
+                        acc[sessionId].push(record);
+                        return acc;
+                      }, {} as Record<string, AttendanceRecord[]>))
+                      .sort(([sessionIdA], [sessionIdB]) => sessionIdB.localeCompare(sessionIdA))
+                      .map(([sessionId, records]) => {
+                        const sessionDate = records[0]?.date || 'Unknown';
+                        const presentCount = records.filter(r => r.verified).length;
+                        const totalCount = records.length;
+                        const searchQuery = sessionSearchQueries[sessionId] || '';
+                        
+                        // Filter records based on search query
+                        const filteredRecords = searchQuery 
+                          ? records.filter(r => 
+                              r.userName?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                              r.rollNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                              r.userEmail?.toLowerCase().includes(searchQuery.toLowerCase())
+                            )
+                          : records;
+                        
+                        return (
+                          <Card key={sessionId} className="mb-4">
+                            <CardHeader className="pb-2">
+                              <div className="flex justify-between items-center">
+                                <div>
+                                  <CardTitle className="text-base">
+                                    Session: {sessionDate}
+                                  </CardTitle>
+                                  <CardDescription>
+                                    Present: {presentCount}/{totalCount} ({Math.round((presentCount/totalCount) * 100)}%)
+                                  </CardDescription>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Button 
+                                    size="sm" 
+                                    variant="outline" 
+                                    onClick={() => copySessionReportToClipboard(sessionId, records)}
+                                  >
+                                    <ClipboardCopy className="h-4 w-4 mr-1" /> Copy Report
+                                  </Button>
+                                </div>
                               </div>
-                              <Button 
-                                size="sm" 
-                                variant="outline" 
-                                onClick={() => copySessionReportToClipboard(sessionId, records)}
-                              >
-                                <ClipboardCopy className="h-4 w-4 mr-1" /> Copy Report
-                              </Button>
-                            </div>
-                          </CardHeader>
-                          <CardContent>
-                            <div className="rounded-md border">
-                              <table className="w-full text-sm">
-                                <thead>
-                                  <tr className="border-b bg-muted/50">
-                                    <th className="px-4 py-2 text-left font-medium">Name</th>
-                                    <th className="px-4 py-2 text-left font-medium">Roll Number</th>
-                                    <th className="px-4 py-2 text-left font-medium">Status</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {records.map((record) => (
-                                    <tr key={record.id} className="border-b">
-                                      <td className="px-4 py-2">{record.userName}</td>
-                                      <td className="px-4 py-2">{record.rollNumber || 'N/A'}</td>
-                                      <td className="px-4 py-2">
-                                        <span className={`px-2 py-1 rounded-full text-xs ${
-                                          record.verified 
-                                            ? 'bg-green-100 text-green-800' 
-                                            : 'bg-red-100 text-red-800'
-                                        }`}>
-                                          {record.verified ? 'Present' : 'Absent'}
-                                        </span>
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      );
-                    })}
+                            </CardHeader>
+                            <CardContent>
+                              {/* Add search input */}
+                              <div className="mb-2">
+                                <div className="relative">
+                                  <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                  <Input
+                                    placeholder="Search by name or roll number..."
+                                    className="pl-8"
+                                    value={sessionSearchQueries[sessionId] || ''}
+                                    onChange={(e) => updateSessionSearch(sessionId, e.target.value)}
+                                  />
+                                  {searchQuery && (
+                                    <Button 
+                                      variant="ghost" 
+                                      size="sm" 
+                                      className="absolute right-0 top-0 h-full px-3"
+                                      onClick={() => updateSessionSearch(sessionId, '')}
+                                    >
+                                      <X className="h-4 w-4" />
+                                    </Button>
+                                  )}
+                                </div>
+                                {searchQuery && (
+                                  <p className="text-xs text-muted-foreground mt-1">
+                                    Found {filteredRecords.length} of {records.length} students
+                                  </p>
+                                )}
+                              </div>
+                              
+                              <div className="rounded-md border">
+                                <div className="max-h-[200px] overflow-y-auto custom-scrollbar">
+                                  <table className="w-full text-sm">
+                                    <thead className="sticky top-0 bg-background z-10">
+                                      <tr className="border-b bg-muted/50">
+                                        <th className="px-4 py-2 text-left font-medium">Name</th>
+                                        <th className="px-4 py-2 text-left font-medium">Roll Number</th>
+                                        <th className="px-4 py-2 text-left font-medium">Status</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {filteredRecords.length > 0 ? (
+                                        filteredRecords.map((record) => (
+                                          <tr key={record.id} className="border-b">
+                                            <td className="px-4 py-2">{record.userName}</td>
+                                            <td className="px-4 py-2">{record.rollNumber || 'N/A'}</td>
+                                            <td className="px-4 py-2">
+                                              <span className={`px-2 py-1 rounded-full text-xs ${
+                                                record.verified 
+                                                  ? 'bg-green-100 text-green-800' 
+                                                  : 'bg-red-100 text-red-800'
+                                              }`}>
+                                                {record.verified ? 'Present' : 'Absent'}
+                                              </span>
+                                            </td>
+                                          </tr>
+                                        ))
+                                      ) : (
+                                        <tr>
+                                          <td colSpan={3} className="px-4 py-4 text-center text-muted-foreground">
+                                            No students match your search
+                                          </td>
+                                        </tr>
+                                      )}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
               </div>

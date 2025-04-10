@@ -57,6 +57,8 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onClassSelect }) => {
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [selectedAdminClass, setSelectedAdminClass] = useState<Class | null>(null);
   const [userDetails, setUserDetails] = useState<Record<string, any>>({});
+  const [studentSearchQuery, setStudentSearchQuery] = useState('');
+  const [pendingSearchQuery, setPendingSearchQuery] = useState('');
   
   // Form states
   const [newClassName, setNewClassName] = useState('');
@@ -771,6 +773,22 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onClassSelect }) => {
            cls.creatorEmail.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // Filter students based on search query
+  const getFilteredStudents = (students: string[] | undefined, searchQuery: string) => {
+    if (!students || students.length === 0) return [];
+    if (!searchQuery) return students;
+    
+    return students.filter(studentId => {
+      const studentEmail = userDetails[studentId]?.email || studentId;
+      const studentName = userDetails[studentId]?.name || '';
+      const studentRollNumber = userDetails[studentId]?.rollNumber || '';
+      
+      return studentEmail.toLowerCase().includes(searchQuery.toLowerCase()) || 
+             studentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+             studentRollNumber.toLowerCase().includes(searchQuery.toLowerCase());
+    });
+  };
+
   // Admin class selector with password dialog
   const renderAdminClassSelector = () => {
     return (
@@ -1042,105 +1060,143 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onClassSelect }) => {
                           <p className="text-sm text-muted-foreground">No students enrolled yet.</p>
                         ) : (
                           <div className="text-sm">
-                            <Table>
-                              <TableHeader>
-                                <TableRow>
-                                  <TableHead>Student Email</TableHead>
-                                  <TableHead>Status</TableHead>
-                                  <TableHead>Actions</TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {cls.students.map(studentId => {
-                                  const studentEmail = userDetails[studentId]?.email || studentId;
-                                  const isUserAdmin = userDetails[studentId]?.isAdmin === true;
-                                  
-                                  return (
-                                    <TableRow key={studentId}>
-                                      <TableCell>{studentEmail}</TableCell>
-                                      <TableCell>
-                                        <div className="flex items-center space-x-2">
-                                          <Badge variant="outline" className="bg-green-50 text-green-700">
-                                            Enrolled
-                                          </Badge>
-                                          {isUserAdmin && (
-                                            <Badge variant="outline" className="bg-blue-50 text-blue-700">
-                                              Admin
-                                            </Badge>
-                                          )}
-                                        </div>
-                                      </TableCell>
-                                      <TableCell className="flex items-center space-x-2">
-                                        <Button 
-                                          size="sm"
-                                          variant="outline"
-                                          className="flex items-center text-orange-600 hover:text-orange-700 transition-all duration-200 active:scale-95 hover:bg-orange-50"
-                                          onClick={(e) => {
-                                            // Animation code
-                                            const button = e.currentTarget;
-                                            button.classList.add('scale-95');
-                                            button.classList.add('bg-orange-100');
-                                            setTimeout(() => {
-                                              button.classList.remove('scale-95');
-                                              button.classList.remove('bg-orange-100');
-                                            }, 300);
+                            <div className="mb-2">
+                              <div className="relative">
+                                <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                  placeholder="Search students by email, name or roll number..."
+                                  className="pl-8"
+                                  value={studentSearchQuery}
+                                  onChange={(e) => setStudentSearchQuery(e.target.value)}
+                                />
+                                {studentSearchQuery && (
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    className="absolute right-0 top-0 h-full px-3"
+                                    onClick={() => setStudentSearchQuery('')}
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                            
+                            <div className="rounded-md border max-h-[400px] overflow-y-auto">
+                              <Table>
+                                <TableHeader className="sticky top-0 bg-background z-10">
+                                  <TableRow>
+                                    <TableHead className="bg-muted">Student Email</TableHead>
+                                    <TableHead className="bg-muted">Status</TableHead>
+                                    <TableHead className="bg-muted">Actions</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {getFilteredStudents(cls.students, studentSearchQuery).length > 0 ? (
+                                    getFilteredStudents(cls.students, studentSearchQuery).map(studentId => {
+                                      const studentEmail = userDetails[studentId]?.email || studentId;
+                                      const isUserAdmin = userDetails[studentId]?.isAdmin === true;
+                                      
+                                      return (
+                                        <TableRow key={studentId}>
+                                          <TableCell>{studentEmail}</TableCell>
+                                          <TableCell>
+                                            <div className="flex items-center space-x-2">
+                                              <Badge variant="outline" className="bg-green-50 text-green-700">
+                                                Enrolled
+                                              </Badge>
+                                              {isUserAdmin && (
+                                                <Badge variant="outline" className="bg-blue-50 text-blue-700">
+                                                  Admin
+                                                </Badge>
+                                              )}
+                                            </div>
+                                          </TableCell>
+                                          <TableCell className="flex items-center space-x-2">
+                                            <Button 
+                                              size="sm"
+                                              variant="outline"
+                                              className="flex items-center text-orange-600 hover:text-orange-700 transition-all duration-200 active:scale-95 hover:bg-orange-50"
+                                              onClick={(e) => {
+                                                // Animation code
+                                                const button = e.currentTarget;
+                                                button.classList.add('scale-95');
+                                                button.classList.add('bg-orange-100');
+                                                setTimeout(() => {
+                                                  button.classList.remove('scale-95');
+                                                  button.classList.remove('bg-orange-100');
+                                                }, 300);
+                                                
+                                                resetDeviceId(studentId, studentEmail);
+                                              }}
+                                            >
+                                              <Smartphone className="h-3 w-3 mr-1" />
+                                              Reset Device
+                                            </Button>
                                             
-                                            resetDeviceId(studentId, studentEmail);
-                                          }}
-                                        >
-                                          <Smartphone className="h-3 w-3 mr-1" />
-                                          Reset Device
-                                        </Button>
-                                        
-                                        {isUserAdmin ? (
-                                          <Button 
-                                            size="sm"
-                                            variant="outline"
-                                            className="flex items-center text-red-600 hover:text-red-700 transition-all duration-200 active:scale-95 hover:bg-red-50"
-                                            onClick={(e) => {
-                                              // Animation code
-                                              const button = e.currentTarget;
-                                              button.classList.add('scale-95');
-                                              button.classList.add('bg-red-100');
-                                              setTimeout(() => {
-                                                button.classList.remove('scale-95');
-                                                button.classList.remove('bg-red-100');
-                                              }, 300);
-                                              
-                                              removeUserAsAdmin(studentId, studentEmail);
-                                            }}
-                                          >
-                                            <UserPlus className="h-3 w-3 mr-1" />
-                                            Remove Admin
-                                          </Button>
-                                        ) : (
-                                          <Button 
-                                            size="sm"
-                                            variant="outline"
-                                            className="flex items-center text-blue-600 hover:text-blue-700 transition-all duration-200 active:scale-95 hover:bg-blue-50"
-                                            onClick={(e) => {
-                                              // Animation code
-                                              const button = e.currentTarget;
-                                              button.classList.add('scale-95');
-                                              button.classList.add('bg-blue-100');
-                                              setTimeout(() => {
-                                                button.classList.remove('scale-95');
-                                                button.classList.remove('bg-blue-100');
-                                              }, 300);
-                                              
-                                              setUserAsAdmin(studentId, studentEmail);
-                                            }}
-                                          >
-                                            <UserPlus className="h-3 w-3 mr-1" />
-                                            Set as Admin
-                                          </Button>
-                                        )}
+                                            {isUserAdmin ? (
+                                              <Button 
+                                                size="sm"
+                                                variant="outline"
+                                                className="flex items-center text-red-600 hover:text-red-700 transition-all duration-200 active:scale-95 hover:bg-red-50"
+                                                onClick={(e) => {
+                                                  // Animation code
+                                                  const button = e.currentTarget;
+                                                  button.classList.add('scale-95');
+                                                  button.classList.add('bg-red-100');
+                                                  setTimeout(() => {
+                                                    button.classList.remove('scale-95');
+                                                    button.classList.remove('bg-red-100');
+                                                  }, 300);
+                                                  
+                                                  removeUserAsAdmin(studentId, studentEmail);
+                                                }}
+                                              >
+                                                <UserPlus className="h-3 w-3 mr-1" />
+                                                Remove Admin
+                                              </Button>
+                                            ) : (
+                                              <Button 
+                                                size="sm"
+                                                variant="outline"
+                                                className="flex items-center text-blue-600 hover:text-blue-700 transition-all duration-200 active:scale-95 hover:bg-blue-50"
+                                                onClick={(e) => {
+                                                  // Animation code
+                                                  const button = e.currentTarget;
+                                                  button.classList.add('scale-95');
+                                                  button.classList.add('bg-blue-100');
+                                                  setTimeout(() => {
+                                                    button.classList.remove('scale-95');
+                                                    button.classList.remove('bg-blue-100');
+                                                  }, 300);
+                                                  
+                                                  setUserAsAdmin(studentId, studentEmail);
+                                                }}
+                                              >
+                                                <UserPlus className="h-3 w-3 mr-1" />
+                                                Set as Admin
+                                              </Button>
+                                            )}
+                                          </TableCell>
+                                        </TableRow>
+                                      );
+                                    })
+                                  ) : (
+                                    <TableRow>
+                                      <TableCell colSpan={3} className="text-center py-4 text-muted-foreground">
+                                        No students match your search
                                       </TableCell>
                                     </TableRow>
-                                  );
-                                })}
-                              </TableBody>
-                            </Table>
+                                  )}
+                                </TableBody>
+                              </Table>
+                            </div>
+                            
+                            {studentSearchQuery && cls.students && cls.students.length > 0 && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Showing {getFilteredStudents(cls.students, studentSearchQuery).length} of {cls.students.length} students
+                              </p>
+                            )}
                           </div>
                         )}
                       </div>
@@ -1151,31 +1207,68 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onClassSelect }) => {
                             <AlertCircle className="h-4 w-4 inline mr-1" /> 
                             Pending Enrollment Requests ({cls.pendingStudents.length})
                           </h3>
-                          <div className="space-y-2">
-                            {cls.pendingStudents.map(studentId => (
-                              <div key={studentId} className="flex items-center justify-between bg-muted p-2 rounded-md">
-                                <span className="text-sm">{userDetails[studentId]?.email || studentId}</span>
-                                <div className="space-x-2">
-                                  <Button 
-                                    size="sm"
-                                    variant="outline" 
-                                    className="text-green-600"
-                                    onClick={() => handleEnrollmentRequest(cls.id, studentId, true)}
-                                  >
-                                    <Check className="h-4 w-4" />
-                                  </Button>
-                                  <Button 
-                                    size="sm"
-                                    variant="outline" 
-                                    className="text-red-600"
-                                    onClick={() => handleEnrollmentRequest(cls.id, studentId, false)}
-                                  >
-                                    <X className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              </div>
-                            ))}
+                          
+                          <div className="mb-2">
+                            <div className="relative">
+                              <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                              <Input
+                                placeholder="Search pending requests..."
+                                className="pl-8"
+                                value={pendingSearchQuery}
+                                onChange={(e) => setPendingSearchQuery(e.target.value)}
+                              />
+                              {pendingSearchQuery && (
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  className="absolute right-0 top-0 h-full px-3"
+                                  onClick={() => setPendingSearchQuery('')}
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              )}
+                            </div>
                           </div>
+                          
+                          <div className="max-h-[300px] overflow-y-auto pr-1">
+                            <div className="space-y-2">
+                              {getFilteredStudents(cls.pendingStudents, pendingSearchQuery).length > 0 ? (
+                                getFilteredStudents(cls.pendingStudents, pendingSearchQuery).map(studentId => (
+                                  <div key={studentId} className="flex items-center justify-between bg-muted p-2 rounded-md">
+                                    <span className="text-sm truncate max-w-[400px]">{userDetails[studentId]?.email || studentId}</span>
+                                    <div className="space-x-2">
+                                      <Button 
+                                        size="sm"
+                                        variant="outline" 
+                                        className="text-green-600"
+                                        onClick={() => handleEnrollmentRequest(cls.id, studentId, true)}
+                                      >
+                                        <Check className="h-4 w-4" />
+                                      </Button>
+                                      <Button 
+                                        size="sm"
+                                        variant="outline" 
+                                        className="text-red-600"
+                                        onClick={() => handleEnrollmentRequest(cls.id, studentId, false)}
+                                      >
+                                        <X className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  </div>
+                                ))
+                              ) : (
+                                <div className="text-center py-4 text-muted-foreground">
+                                  No pending requests match your search
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          
+                          {pendingSearchQuery && cls.pendingStudents && cls.pendingStudents.length > 0 && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Showing {getFilteredStudents(cls.pendingStudents, pendingSearchQuery).length} of {cls.pendingStudents.length} pending requests
+                            </p>
+                          )}
                         </div>
                       )}
                       
@@ -1282,56 +1375,58 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onClassSelect }) => {
                 </CardContent>
               </Card>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {filteredClasses.map((cls) => {
-                  const isEnrolled = cls.students && cls.students.includes(currentUser?.uid || '');
-                  const isPending = cls.pendingStudents && cls.pendingStudents.includes(currentUser?.uid || '');
-                  
-                  return (
-                    <Card key={cls.id}>
-                      <CardHeader>
-                        <CardTitle>{cls.name}</CardTitle>
-                        <CardDescription>
-                          Instructor: {cls.creatorEmail}
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        {cls.description && <p className="mb-4">{cls.description}</p>}
-                        <div className="flex items-center text-sm text-muted-foreground">
-                          <Users className="h-4 w-4 mr-1" />
-                          <span>{cls.students?.length || 0} students enrolled</span>
-                        </div>
-                      </CardContent>
-                      <CardFooter className="flex justify-between">
-                        {isEnrolled ? (
-                          <Badge variant="outline" className="bg-green-50 text-green-700">
-                            Enrolled
-                          </Badge>
-                        ) : isPending ? (
-                          <Badge variant="outline" className="bg-yellow-50 text-yellow-700">
-                            Pending Approval
-                          </Badge>
-                        ) : (
-                          <Button
-                            size="sm"
-                            onClick={() => {
-                              setJoinClassId(cls.id);
-                              setJoinDialogOpen(true);
-                            }}
-                          >
-                            Join Class
-                          </Button>
-                        )}
-                        
-                        {cls.isActive && (
-                          <Badge className="bg-green-100 text-green-800">
-                            Active
-                          </Badge>
-                        )}
-                      </CardFooter>
-                    </Card>
-                  );
-                })}
+              <div className="max-h-[600px] overflow-y-auto pr-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {filteredClasses.map((cls) => {
+                    const isEnrolled = cls.students && cls.students.includes(currentUser?.uid || '');
+                    const isPending = cls.pendingStudents && cls.pendingStudents.includes(currentUser?.uid || '');
+                    
+                    return (
+                      <Card key={cls.id}>
+                        <CardHeader>
+                          <CardTitle>{cls.name}</CardTitle>
+                          <CardDescription>
+                            Instructor: {cls.creatorEmail}
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          {cls.description && <p className="mb-4">{cls.description}</p>}
+                          <div className="flex items-center text-sm text-muted-foreground">
+                            <Users className="h-4 w-4 mr-1" />
+                            <span>{cls.students?.length || 0} students enrolled</span>
+                          </div>
+                        </CardContent>
+                        <CardFooter className="flex justify-between">
+                          {isEnrolled ? (
+                            <Badge variant="outline" className="bg-green-50 text-green-700">
+                              Enrolled
+                            </Badge>
+                          ) : isPending ? (
+                            <Badge variant="outline" className="bg-yellow-50 text-yellow-700">
+                              Pending Approval
+                            </Badge>
+                          ) : (
+                            <Button
+                              size="sm"
+                              onClick={() => {
+                                setJoinClassId(cls.id);
+                                setJoinDialogOpen(true);
+                              }}
+                            >
+                              Join Class
+                            </Button>
+                          )}
+                          
+                          {cls.isActive && (
+                            <Badge className="bg-green-100 text-green-800">
+                              Active
+                            </Badge>
+                          )}
+                        </CardFooter>
+                      </Card>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </TabsContent>
@@ -1348,7 +1443,7 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onClassSelect }) => {
                 </CardContent>
               </Card>
             ) : (
-              <div className="space-y-4">
+              <div className="max-h-[600px] overflow-y-auto pr-2 space-y-4">
                 {enrolledClasses.map((cls) => (
                   <Card key={cls.id}>
                     <CardHeader>
@@ -1389,7 +1484,7 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onClassSelect }) => {
                 </CardContent>
               </Card>
             ) : (
-              <div className="space-y-4">
+              <div className="max-h-[600px] overflow-y-auto pr-2 space-y-4">
                 {pendingClasses.map((cls) => (
                   <Card key={cls.id}>
                     <CardHeader>
