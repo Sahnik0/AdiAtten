@@ -14,7 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { 
   CheckCircle, XCircle, Users, Clock, Download, Settings, 
-  RefreshCcw, FilePlus, Database, History, UserPlus, Shield
+  RefreshCcw, FilePlus, Database, History, Smartphone
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import GeolocationSettings from './GeolocationSettings';
@@ -200,108 +200,115 @@ const AdminPanel = () => {
   }
 
   return (
-    <div className="w-full max-w-4xl mx-auto space-y-6">
+    <div className="w-full max-w-4xl mx-auto space-y-3 sm:space-y-6 px-2 sm:px-4">
       <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
+        <CardHeader className="px-3 sm:px-6 py-3 sm:py-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-0">
             <div>
-              <CardTitle className="text-2xl font-bold">Admin Dashboard</CardTitle>
-              <CardDescription>Manage attendance records and campus settings</CardDescription>
+              <CardTitle className="text-lg sm:text-2xl font-bold">Admin Dashboard</CardTitle>
+              <CardDescription className="text-xs sm:text-sm">Manage attendance records and campus settings</CardDescription>
             </div>
             <Button 
               variant="outline" 
               onClick={fetchAttendanceRecords}
-              className="flex items-center"
+              className="flex items-center text-xs sm:text-sm h-8 sm:h-9 w-full sm:w-auto"
             >
-              <RefreshCcw className="h-4 w-4 mr-2" />
+              <RefreshCcw className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
               Refresh
             </Button>
           </div>
         </CardHeader>
       </Card>
 
-      <Tabs defaultValue={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-6">
+      <Tabs defaultValue={activeTab} onValueChange={setActiveTab} className="space-y-3 sm:space-y-4">
+        <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 h-9 sm:h-10 text-xs sm:text-sm">
           <TabsTrigger value="live" className="flex items-center">
-            <Clock className="h-4 w-4 mr-2" /> Live View
+            <Clock className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+            <span className="hidden xs:inline">Live</span> View
           </TabsTrigger>
           <TabsTrigger value="manual" className="flex items-center">
-            <FilePlus className="h-4 w-4 mr-2" /> Manual Entry
+            <FilePlus className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+            <span className="hidden xs:inline">Manual</span> Entry
           </TabsTrigger>
           <TabsTrigger value="students" className="flex items-center">
-            <Users className="h-4 w-4 mr-2" /> Students
+            <Users className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" /> 
+            <span className="hidden xs:inline">Students</span>
           </TabsTrigger>
           <TabsTrigger value="history" className="flex items-center">
-            <History className="h-4 w-4 mr-2" /> History
+            <History className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+            <span className="hidden xs:inline">History</span>
           </TabsTrigger>
           <TabsTrigger value="export" className="flex items-center">
-            <Download className="h-4 w-4 mr-2" /> Export
+            <Download className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+            <span className="hidden xs:inline">Export</span>
           </TabsTrigger>
           <TabsTrigger value="settings" className="flex items-center">
-            <Settings className="h-4 w-4 mr-2" /> Settings
+            <Settings className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+            <span className="hidden xs:inline">Settings</span>
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="live">
           <Card>
-            <CardHeader>
-              <CardTitle>Live Attendance Status</CardTitle>
-              <CardDescription>
+            <CardHeader className="px-3 sm:px-6 py-3 sm:py-6">
+              <CardTitle className="text-base sm:text-lg">Live Attendance Status</CardTitle>
+              <CardDescription className="text-xs sm:text-sm">
                 Real-time attendance updates for today
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="px-3 sm:px-6 py-2 sm:py-4">
               {loading ? (
-                <div className="flex justify-center py-8">
-                  <Clock className="h-8 w-8 animate-spin text-muted-foreground" />
+                <div className="flex justify-center py-4 sm:py-8">
+                  <Clock className="h-6 w-6 sm:h-8 sm:w-8 animate-spin text-muted-foreground" />
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-3 sm:space-y-6">
                   <div>
-                    <h3 className="text-lg font-medium mb-2">Pending Verification</h3>
+                    <h3 className="text-base sm:text-lg font-medium mb-2">Pending Verification</h3>
                     {Object.keys(pendingAttendance).length === 0 ? (
-                      <p className="text-muted-foreground text-center py-4">No pending attendance requests</p>
+                      <p className="text-xs sm:text-sm text-muted-foreground text-center py-4">No pending attendance requests</p>
                     ) : (
-                      <div className="space-y-2">
+                      <div className="space-y-2 sm:space-y-3">
                         {Object.entries(pendingAttendance).map(([userId, data]) => {
                           const record = attendanceRecords.find(r => r.userId === userId);
                           
                           if (record) return null;
                           
                           return (
-                            <div key={userId} className="flex items-center justify-between p-4 bg-muted rounded-md">
+                            <div key={userId} className="flex flex-col sm:flex-row sm:items-center justify-between p-2 sm:p-4 bg-muted rounded-md gap-2 sm:gap-0">
                               <div>
-                                <p className="font-medium">{data.name}</p>
-                                <p className="text-sm">{data.rollNumber || 'N/A'}</p>
-                                <p className="text-sm text-muted-foreground">{data.email}</p>
-                                <p className="text-xs text-muted-foreground">
+                                <p className="font-medium text-sm sm:text-base">{data.name}</p>
+                                <p className="text-xs sm:text-sm">{data.rollNumber || 'N/A'}</p>
+                                <p className="text-xs sm:text-sm text-muted-foreground">{data.email}</p>
+                                <p className="text-[10px] sm:text-xs text-muted-foreground">
                                   {new Date(data.timestamp).toLocaleTimeString()}
                                 </p>
                               </div>
-                              <div className="flex space-x-2">
+                              <div className="flex flex-wrap gap-1 sm:gap-2 justify-end">
                                 <Button 
                                   size="sm" 
                                   variant="outline" 
-                                  className="text-green-600"
+                                  className="text-green-600 h-7 sm:h-8 text-[10px] sm:text-xs"
                                   onClick={() => updateAttendanceStatus(`${userId}_${data.date}`, true)}
                                 >
-                                  <CheckCircle className="h-4 w-4 mr-1" /> Present
+                                  <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 mr-1" /> Present
                                 </Button>
                                 <Button 
                                   size="sm" 
                                   variant="outline" 
-                                  className="text-red-600"
+                                  className="text-red-600 h-7 sm:h-8 text-[10px] sm:text-xs"
                                   onClick={() => updateAttendanceStatus(`${userId}_${data.date}`, false)}
                                 >
-                                  <XCircle className="h-4 w-4 mr-1" /> Absent
+                                  <XCircle className="h-3 w-3 sm:h-4 sm:w-4 mr-1" /> Absent
                                 </Button>
                                 <Button 
                                   size="sm" 
                                   variant="outline"
                                   onClick={() => resetDeviceId(userId)}
                                   title="Reset Device ID"
+                                  className="h-7 sm:h-8"
                                 >
-                                  <RefreshCcw className="h-4 w-4" />
+                                  <Smartphone className="h-3 w-3 sm:h-4 sm:w-4" />
                                 </Button>
                               </div>
                             </div>
@@ -312,54 +319,55 @@ const AdminPanel = () => {
                   </div>
                   
                   <div>
-                    <h3 className="text-lg font-medium mb-2">Today's Records</h3>
+                    <h3 className="text-base sm:text-lg font-medium mb-2">Today's Records</h3>
                     {attendanceRecords.length === 0 ? (
-                      <p className="text-muted-foreground text-center py-4">No attendance records for today</p>
+                      <p className="text-xs sm:text-sm text-muted-foreground text-center py-4">No attendance records for today</p>
                     ) : (
-                      <div className="space-y-2">
+                      <div className="space-y-2 sm:space-y-3">
                         {attendanceRecords.map(record => (
                           <div 
                             key={record.id} 
-                            className={`flex items-center justify-between p-4 rounded-md ${
+                            className={`flex flex-col sm:flex-row sm:items-center justify-between p-2 sm:p-4 rounded-md gap-2 sm:gap-0 ${
                               record.verified 
                                 ? 'bg-green-50 border border-green-100' 
                                 : 'bg-amber-50 border border-amber-100'
                             }`}
                           >
                             <div>
-                              <p className="font-medium">{record.userName}</p>
-                              <p className="text-sm">{record.rollNumber || 'N/A'}</p>
-                              <p className="text-sm text-muted-foreground">{record.userEmail}</p>
-                              <p className="text-xs text-muted-foreground">
+                              <p className="font-medium text-sm sm:text-base">{record.userName}</p>
+                              <p className="text-xs sm:text-sm">{record.rollNumber || 'N/A'}</p>
+                              <p className="text-xs sm:text-sm text-muted-foreground">{record.userEmail}</p>
+                              <p className="text-[10px] sm:text-xs text-muted-foreground">
                                 {record.timestamp?.toDate 
                                   ? record.timestamp.toDate().toLocaleTimeString() 
                                   : 'Pending'}
                               </p>
                             </div>
-                            <div className="flex space-x-2">
+                            <div className="flex flex-wrap gap-1 sm:gap-2 justify-end">
                               <Button 
                                 size="sm" 
                                 variant={record.verified ? "default" : "outline"}
-                                className={record.verified ? "bg-green-600" : "text-green-600"}
+                                className={`${record.verified ? "bg-green-600" : "text-green-600"} h-7 sm:h-8 text-[10px] sm:text-xs`}
                                 onClick={() => updateAttendanceStatus(record.id, true)}
                               >
-                                <CheckCircle className="h-4 w-4 mr-1" /> Present
+                                <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 mr-1" /> Present
                               </Button>
                               <Button 
                                 size="sm" 
                                 variant={!record.verified ? "default" : "outline"}
-                                className={!record.verified ? "bg-red-600" : "text-red-600"}
+                                className={`${!record.verified ? "bg-red-600" : "text-red-600"} h-7 sm:h-8 text-[10px] sm:text-xs`}
                                 onClick={() => updateAttendanceStatus(record.id, false)}
                               >
-                                <XCircle className="h-4 w-4 mr-1" /> Absent
+                                <XCircle className="h-3 w-3 sm:h-4 sm:w-4 mr-1" /> Absent
                               </Button>
                               <Button 
                                 size="sm" 
                                 variant="outline"
                                 onClick={() => resetDeviceId(record.userId)}
                                 title="Reset Device ID"
+                                className="h-7 sm:h-8"
                               >
-                                <RefreshCcw className="h-4 w-4" />
+                                <Smartphone className="h-3 w-3 sm:h-4 sm:w-4" />
                               </Button>
                             </div>
                           </div>
@@ -383,18 +391,18 @@ const AdminPanel = () => {
 
         <TabsContent value="history">
           <Card>
-            <CardHeader>
-              <CardTitle>Attendance History</CardTitle>
-              <CardDescription>
+            <CardHeader className="px-3 sm:px-6 py-3 sm:py-6">
+              <CardTitle className="text-base sm:text-lg">Attendance History</CardTitle>
+              <CardDescription className="text-xs sm:text-sm">
                 View past attendance records
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-center py-8">
-                <Database className="h-12 w-12 text-muted-foreground mb-4" />
+            <CardContent className="px-3 sm:px-6 py-2 sm:py-4">
+              <div className="flex flex-col sm:flex-row items-center justify-center py-4 sm:py-8 gap-3 sm:gap-4 text-center sm:text-left">
+                <Database className="h-8 w-8 sm:h-12 sm:w-12 text-muted-foreground" />
                 <div>
-                  <h3 className="text-lg font-medium">Attendance Records</h3>
-                  <p className="text-muted-foreground">
+                  <h3 className="text-base sm:text-lg font-medium">Attendance Records</h3>
+                  <p className="text-xs sm:text-sm text-muted-foreground">
                     The complete history feature will be available soon.
                   </p>
                 </div>
@@ -405,34 +413,34 @@ const AdminPanel = () => {
 
         <TabsContent value="export">
           <Card>
-            <CardHeader>
-              <CardTitle>Export Attendance Data</CardTitle>
-              <CardDescription>
+            <CardHeader className="px-3 sm:px-6 py-3 sm:py-6">
+              <CardTitle className="text-base sm:text-lg">Export Attendance Data</CardTitle>
+              <CardDescription className="text-xs sm:text-sm">
                 Download attendance records in various formats
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <CardContent className="px-3 sm:px-6 py-2 sm:py-4 space-y-3 sm:space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-4">
                 <Button 
                   onClick={exportToCsv}
-                  className="w-full flex items-center justify-center h-20"
+                  className="w-full flex items-center justify-center h-16 sm:h-20"
                 >
-                  <Download className="h-6 w-6 mr-2" />
+                  <Download className="h-4 w-4 sm:h-6 sm:w-6 mr-1 sm:mr-2" />
                   <div>
-                    <div className="font-medium">Export as CSV</div>
-                    <div className="text-xs">For spreadsheets & databases</div>
+                    <div className="font-medium text-sm sm:text-base">Export as CSV</div>
+                    <div className="text-[10px] sm:text-xs">For spreadsheets & databases</div>
                   </div>
                 </Button>
                 
                 <Button 
                   variant="outline"
                   onClick={exportAsText}
-                  className="w-full flex items-center justify-center h-20"
+                  className="w-full flex items-center justify-center h-16 sm:h-20"
                 >
-                  <Download className="h-6 w-6 mr-2" />
+                  <Download className="h-4 w-4 sm:h-6 sm:w-6 mr-1 sm:mr-2" />
                   <div>
-                    <div className="font-medium">Copy as Text</div>
-                    <div className="text-xs">For messages & emails</div>
+                    <div className="font-medium text-sm sm:text-base">Copy as Text</div>
+                    <div className="text-[10px] sm:text-xs">For messages & emails</div>
                   </div>
                 </Button>
               </div>
