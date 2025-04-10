@@ -696,8 +696,10 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onClassSelect }) => {
         return;
       }
       
+      // Update user to admin status AND clear device ID
       await updateDoc(userRef, {
-        isAdmin: true
+        isAdmin: true,
+        deviceId: null  // Clear device ID when user becomes admin
       });
       
       toast({
@@ -710,7 +712,8 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onClassSelect }) => {
       if (updatedUserDetails[studentId]) {
         updatedUserDetails[studentId] = {
           ...updatedUserDetails[studentId],
-          isAdmin: true
+          isAdmin: true,
+          deviceId: null  // Also update local state
         };
         setUserDetails(updatedUserDetails);
       }
@@ -1421,4 +1424,65 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onClassSelect }) => {
   );
 };
 
+// This function should be added to your useAuth hook or modified if it exists
+const storeDeviceId = async (userId: string, deviceId: string) => {
+  try {
+    // First check if the user is an admin
+    const userDoc = await getDoc(doc(firestore, 'users', userId));
+    if (userDoc.exists() && userDoc.data().isAdmin === true) {
+      // Skip storing device ID for admin users
+      console.log("Admin user detected - skipping device ID storage");
+      return;
+    }
+    
+    // For non-admin users, store the device ID
+    await updateDoc(doc(firestore, 'users', userId), {
+      deviceId: deviceId
+    });
+  } catch (error) {
+    console.error("Error storing device ID:", error);
+    throw error;
+  }
+};
+
+// In your authentication hook/service where deviceId is set during login
+const signIn = async (email: string, password: string) => {
+  try {
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    const user = userCredential.user;
+    
+    // Generate or retrieve device ID (e.g. from local storage or browser fingerprint)
+    const deviceId = generateDeviceId(); // Your existing device ID generation function
+    
+    // Store the device ID, this function now checks for admin status
+    await storeDeviceId(user.uid, deviceId);
+    
+    return user;
+  } catch (error) {
+    console.error("Error signing in:", error);
+    throw error;
+  }
+};
+
 export default ClassManagement;
+async function signInWithEmailAndPassword(auth: any, email: string, password: string) {
+  try {
+    // Call Firebase's authentication method
+    const result = await auth.signInWithEmailAndPassword(email, password);
+    return result;
+  } catch (error: any) {
+    // Handle common Firebase auth errors
+    switch (error.code) {
+      case 'auth/invalid-email':
+        throw new Error('Invalid email address format.');
+      case 'auth/user-disabled':
+        throw new Error('This account has been disabled.');
+      case 'auth/user-not-found':
+        throw new Error('No account found with this email.');
+      case 'auth/wrong-password':
+        throw new Error('Incorrect password.');
+      default:
+        throw new Error('Failed to sign in. Please try again.');
+    }
+  }
+}
