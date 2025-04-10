@@ -74,6 +74,16 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onClassSelect }) => {
   const [joinDialogOpen, setJoinDialogOpen] = useState(false);
   const [startAttendanceOpen, setStartAttendanceOpen] = useState(false);
 
+  // Fix for the DialogTrigger outside of Dialog context in the admin view
+  const [startAttendanceDialogOpen, setStartAttendanceDialogOpen] = useState(false);
+  const [classIdToStartAttendance, setClassIdToStartAttendance] = useState<string>('');
+
+  // Delete dialog states
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [classIdToDelete, setClassIdToDelete] = useState<string>('');
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteError, setDeleteError] = useState('');
+
   // Check local storage for previously selected class
   useEffect(() => {
     if (currentUser?.isAdmin) {
@@ -598,8 +608,9 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onClassSelect }) => {
   };
 
   // Delete a class (admin only)
-  const deleteClass = async (classId: string) => {
+  const deleteClass = async (classId: string, password: string) => {
     if (!currentUser || !currentUser.isAdmin) return;
+    setDeleteError('');
     
     try {
       // First check if attendance is active
@@ -626,7 +637,34 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onClassSelect }) => {
         return;
       }
       
-      // Delete the class
+      // If user is class creator, they can delete without password
+      if (classData.createdBy === currentUser.uid) {
+        // Delete the class
+        await deleteDoc(classRef);
+        
+        toast({
+          title: "Success",
+          description: "Class deleted successfully.",
+        });
+        
+        // If this was the selected class, clear the selection
+        if (classId === selectedClassId) {
+          setSelectedClassId('');
+          setSelectedAdminClass(null);
+          localStorage.removeItem('selectedAdminClassId');
+        }
+        
+        fetchClasses();
+        return;
+      }
+      
+      // For non-creators, verify password
+      if (classData.password !== password) {
+        setDeleteError('Incorrect password. Class deletion canceled.');
+        return;
+      }
+      
+      // Password is correct, proceed with deletion
       await deleteDoc(classRef);
       
       toast({
@@ -641,6 +679,8 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onClassSelect }) => {
         localStorage.removeItem('selectedAdminClassId');
       }
       
+      setDeletePassword('');
+      setDeleteDialogOpen(false);
       fetchClasses();
     } catch (error) {
       console.error("Error deleting class:", error);
@@ -789,19 +829,421 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onClassSelect }) => {
     });
   };
 
-  // Admin class selector with password dialog
+  // Make the admin view responsive
+  const renderAdminView = () => {
+    return (
+      <>
+        {renderAdminClassSelector()}
+        
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-2 sm:mb-4 gap-2 sm:gap-0">
+          <h2 className="text-lg sm:text-xl font-bold">Class Management</h2>
+          <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="flex items-center w-full sm:w-auto text-xs sm:text-sm h-8 sm:h-9">
+                <Plus className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" /> Create Class
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-sm sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle className="text-base sm:text-lg">Create New Class</DialogTitle>
+                <DialogDescription className="text-xs sm:text-sm">
+                  Create a new class for students to enroll in.
+                </DialogDescription>
+              </DialogHeader>
+              
+              <div className="space-y-3 sm:space-y-4 py-2 sm:py-4">
+                <div className="space-y-1 sm:space-y-2">
+                  <Label htmlFor="name" className="text-sm sm:text-base">Class Name</Label>
+                  <Input 
+                    id="name" 
+                    placeholder="Enter class name" 
+                    value={newClassName}
+                    onChange={(e) => setNewClassName(e.target.value)}
+                    className="h-8 sm:h-9 text-xs sm:text-sm"
+                  />
+                </div>
+                
+                <div className="space-y-1 sm:space-y-2">
+                  <Label htmlFor="description" className="text-sm sm:text-base">Description (Optional)</Label>
+                  <Textarea 
+                    id="description" 
+                    placeholder="Enter class description" 
+                    value={newClassDescription}
+                    onChange={(e) => setNewClassDescription(e.target.value)}
+                    className="text-xs sm:text-sm min-h-[60px] sm:min-h-[80px]"
+                  />
+                </div>
+                
+                <div className="space-y-1 sm:space-y-2">
+                  <Label htmlFor="password" className="text-sm sm:text-base">Class Password (Required for Admin Access)</Label>
+                  <Input 
+                    id="password" 
+                    type="password"
+                    placeholder="Set a password" 
+                    value={newClassPassword}
+                    onChange={(e) => setNewClassPassword(e.target.value)}
+                    className="h-8 sm:h-9 text-xs sm:text-sm"
+                  />
+                  <p className="text-[10px] sm:text-xs text-muted-foreground">
+                    This password will be used by other admins to access and manage this class.
+                  </p>
+                </div>
+              </div>
+              
+              <DialogFooter className="gap-1 sm:gap-2">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setCreateDialogOpen(false)} 
+                  className="text-xs sm:text-sm h-7 sm:h-9"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={createClass}
+                  className="text-xs sm:text-sm h-7 sm:h-9"
+                >
+                  Create Class
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
+        
+        {!selectedAdminClass ? (
+          <Card className="mb-3 sm:mb-6">
+            <CardContent className="py-4 sm:py-8 text-center">
+              <p className="text-xs sm:text-sm text-muted-foreground">Please select a class to manage from the dropdown above.</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-2 sm:space-y-4">
+            {loading ? (
+              <div className="flex justify-center py-4 sm:py-8">
+                <RefreshCcw className="h-6 w-6 sm:h-8 sm:w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : classes.length === 0 ? (
+              <Card>
+                <CardContent className="py-4 sm:py-8 text-center">
+                  <p className="text-xs sm:text-sm text-muted-foreground">No classes found. Create your first class.</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div>
+                {classes.filter(cls => cls.id === selectedClassId).map((cls) => (
+                  <Card key={cls.id} className="mb-2 sm:mb-4">
+                    <CardHeader className="pb-1 sm:pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
+                      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 sm:gap-0">
+                        <div>
+                          <CardTitle className="text-base sm:text-xl">{cls.name}</CardTitle>
+                          <CardDescription className="text-xs sm:text-sm">
+                            Created by: {cls.creatorEmail}
+                          </CardDescription>
+                        </div>
+                        <div className="flex flex-wrap gap-1 sm:gap-2">
+                          {cls.isActive ? (
+                            <Button 
+                              variant="destructive" 
+                              onClick={() => endAttendance(cls.id)}
+                              className="text-xs sm:text-sm h-7 sm:h-9 px-2 sm:px-4"
+                            >
+                              End Attendance
+                            </Button>
+                          ) : (
+                            <Button 
+                              className="flex items-center text-xs sm:text-sm h-7 sm:h-9 px-2 sm:px-4"
+                              onClick={() => {
+                                setClassIdToStartAttendance(cls.id);
+                                setStartAttendanceDialogOpen(true);
+                              }}
+                            >
+                              Start Attendance
+                            </Button>
+                          )}
+                          
+                          <Button 
+                            variant="outline" 
+                            onClick={() => {
+                              setClassIdToDelete(cls.id);
+                              setDeletePassword('');
+                              setDeleteError('');
+                              setDeleteDialogOpen(true);
+                            }}
+                            disabled={cls.isActive}
+                            className="text-xs sm:text-sm h-7 sm:h-9 px-2 sm:px-4"
+                          >
+                            Delete
+                          </Button>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    
+                    <CardContent className="px-3 py-2 sm:px-6 sm:py-3">
+                      {cls.description && <p className="mb-2 sm:mb-4 text-xs sm:text-sm text-muted-foreground">{cls.description}</p>}
+                      
+                      {/* Create tabs for students and approvals */}
+                      <Tabs defaultValue="students" className="mt-2 sm:mt-4">
+                        <TabsList className="mb-2 sm:mb-4 h-8 sm:h-10">
+                          <TabsTrigger value="students" className="text-xs sm:text-sm">
+                            Students ({cls.students?.length || 0})
+                          </TabsTrigger>
+                          <TabsTrigger value="approvals" className="relative text-xs sm:text-sm">
+                            Enrollment Requests
+                            {cls.pendingStudents && cls.pendingStudents.length > 0 && (
+                              <span className="ml-1 sm:ml-2 bg-red-100 text-red-800 text-[10px] sm:text-xs rounded-full px-1.5 py-0.5">
+                                {cls.pendingStudents.length}
+                              </span>
+                            )}
+                          </TabsTrigger>
+                        </TabsList>
+                        
+                        <TabsContent value="students">
+                          {!cls.students || cls.students.length === 0 ? (
+                            <p className="text-xs sm:text-sm text-muted-foreground">No students enrolled yet.</p>
+                          ) : (
+                            <div className="text-xs sm:text-sm">
+                              <div className="mb-2">
+                                <div className="relative">
+                                  <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
+                                  <Input
+                                    placeholder="Search students by email, name or roll number..."
+                                    className="pl-7 sm:pl-8 h-7 sm:h-9 text-xs sm:text-sm"
+                                    value={studentSearchQuery}
+                                    onChange={(e) => setStudentSearchQuery(e.target.value)}
+                                  />
+                                  {studentSearchQuery && (
+                                    <Button 
+                                      variant="ghost" 
+                                      size="sm" 
+                                      className="absolute right-0 top-0 h-full px-1 sm:px-3"
+                                      onClick={() => setStudentSearchQuery('')}
+                                    >
+                                      <X className="h-3 w-3 sm:h-4 sm:w-4" />
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+                              
+                              <div className="rounded-md border max-h-[300px] sm:max-h-[400px] overflow-y-auto">
+                                <Table>
+                                  <TableHeader className="sticky top-0 bg-background z-10">
+                                    <TableRow>
+                                      <TableHead className="bg-muted px-2 py-1 sm:px-4 sm:py-2 text-xs sm:text-sm">Student Email</TableHead>
+                                      <TableHead className="bg-muted px-2 py-1 sm:px-4 sm:py-2 text-xs sm:text-sm">Status</TableHead>
+                                      <TableHead className="bg-muted px-2 py-1 sm:px-4 sm:py-2 text-xs sm:text-sm">Actions</TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {getFilteredStudents(cls.students, studentSearchQuery).length > 0 ? (
+                                      getFilteredStudents(cls.students, studentSearchQuery).map(studentId => {
+                                        const studentEmail = userDetails[studentId]?.email || studentId;
+                                        const isUserAdmin = userDetails[studentId]?.isAdmin === true;
+                                        
+                                        return (
+                                          <TableRow key={studentId}>
+                                            <TableCell className="px-2 py-1 sm:px-4 sm:py-2 max-w-[120px] sm:max-w-none truncate">
+                                              {studentEmail}
+                                            </TableCell>
+                                            <TableCell className="px-2 py-1 sm:px-4 sm:py-2">
+                                              <div className="flex flex-wrap gap-1">
+                                                <Badge variant="outline" className="bg-green-50 text-green-700 text-[10px] sm:text-xs px-1 py-0 sm:px-2 sm:py-0.5">
+                                                  Enrolled
+                                                </Badge>
+                                                {isUserAdmin && (
+                                                  <Badge variant="outline" className="bg-blue-50 text-blue-700 text-[10px] sm:text-xs px-1 py-0 sm:px-2 sm:py-0.5">
+                                                    Admin
+                                                  </Badge>
+                                                )}
+                                              </div>
+                                            </TableCell>
+                                            <TableCell className="px-2 py-1 sm:px-4 sm:py-2">
+                                              <div className="flex items-center justify-start gap-1 sm:gap-2">
+                                                <Button 
+                                                  size="sm"
+                                                  variant="outline"
+                                                  className="h-6 sm:h-8 px-1 sm:px-2 text-[10px] sm:text-xs text-orange-600 hover:text-orange-700"
+                                                  onClick={() => resetDeviceId(studentId, studentEmail)}
+                                                >
+                                                  <Smartphone className="h-2.5 w-2.5 sm:h-3 sm:w-3 mr-1" />
+                                                  <span className="hidden xs:inline">Reset</span> Device
+                                                </Button>
+                                                
+                                                {isUserAdmin ? (
+                                                  <Button 
+                                                    size="sm"
+                                                    variant="outline"
+                                                    className="h-6 sm:h-8 px-1 sm:px-2 text-[10px] sm:text-xs text-red-600 hover:text-red-700"
+                                                    onClick={() => removeUserAsAdmin(studentId, studentEmail)}
+                                                  >
+                                                    <UserPlus className="h-2.5 w-2.5 sm:h-3 sm:w-3 mr-1" />
+                                                    <span className="hidden xs:inline">Remove</span> Admin
+                                                  </Button>
+                                                ) : (
+                                                  <Button 
+                                                    size="sm"
+                                                    variant="outline"
+                                                    className="h-6 sm:h-8 px-1 sm:px-2 text-[10px] sm:text-xs text-blue-600 hover:text-blue-700"
+                                                    onClick={() => setUserAsAdmin(studentId, studentEmail)}
+                                                  >
+                                                    <UserPlus className="h-2.5 w-2.5 sm:h-3 sm:w-3 mr-1" />
+                                                    <span className="hidden xs:inline">Set as</span> Admin
+                                                  </Button>
+                                                )}
+                                              </div>
+                                            </TableCell>
+                                          </TableRow>
+                                        );
+                                      })
+                                    ) : (
+                                      <TableRow>
+                                        <TableCell colSpan={3} className="text-center py-3 text-xs sm:text-sm text-muted-foreground">
+                                          No students match your search
+                                        </TableCell>
+                                      </TableRow>
+                                    )}
+                                  </TableBody>
+                                </Table>
+                              </div>
+                              
+                              {studentSearchQuery && cls.students && cls.students.length > 0 && (
+                                <p className="text-[10px] sm:text-xs text-muted-foreground mt-1">
+                                  Showing {getFilteredStudents(cls.students, studentSearchQuery).length} of {cls.students.length} students
+                                </p>
+                              )}
+                            </div>
+                          )}
+                        </TabsContent>
+                        
+                        {/* New tab for enrollment requests */}
+                        <TabsContent value="approvals">
+                          {!cls.pendingStudents || cls.pendingStudents.length === 0 ? (
+                            <div className="text-center py-4 sm:py-8 border rounded-md">
+                              <p className="text-xs sm:text-sm text-muted-foreground">No pending enrollment requests.</p>
+                            </div>
+                          ) : (
+                            <div>
+                              <div className="mb-2">
+                                <div className="relative">
+                                  <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
+                                  <Input
+                                    placeholder="Search pending requests..."
+                                    className="pl-7 sm:pl-8 h-7 sm:h-9 text-xs sm:text-sm"
+                                    value={pendingSearchQuery}
+                                    onChange={(e) => setPendingSearchQuery(e.target.value)}
+                                  />
+                                  {pendingSearchQuery && (
+                                    <Button 
+                                      variant="ghost" 
+                                      size="sm" 
+                                      className="absolute right-0 top-0 h-full px-1 sm:px-3"
+                                      onClick={() => setPendingSearchQuery('')}
+                                    >
+                                      <X className="h-3 w-3 sm:h-4 sm:w-4" />
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+                              
+                              <div className="rounded-md border max-h-[300px] sm:max-h-[400px] overflow-y-auto">
+                                <Table>
+                                  <TableHeader className="sticky top-0 bg-background z-10">
+                                    <TableRow>
+                                      <TableHead className="bg-muted px-2 py-1 sm:px-4 sm:py-2 text-xs sm:text-sm">Student Email</TableHead>
+                                      <TableHead className="bg-muted px-2 py-1 sm:px-4 sm:py-2 text-xs sm:text-sm text-right">Actions</TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {getFilteredStudents(cls.pendingStudents, pendingSearchQuery).length > 0 ? (
+                                      getFilteredStudents(cls.pendingStudents, pendingSearchQuery).map(studentId => (
+                                        <TableRow key={studentId}>
+                                          <TableCell className="px-2 py-1 sm:px-4 sm:py-2 max-w-[120px] sm:max-w-none truncate">
+                                            {userDetails[studentId]?.email || studentId}
+                                          </TableCell>
+                                          <TableCell className="px-2 py-1 sm:px-4 sm:py-2 text-right">
+                                            <div className="flex justify-end space-x-1 sm:space-x-2">
+                                              <Button 
+                                                size="sm"
+                                                variant="outline" 
+                                                className="h-6 sm:h-8 px-1 sm:px-2 text-[10px] sm:text-xs text-green-600 hover:bg-green-50 hover:text-green-700"
+                                                onClick={() => handleEnrollmentRequest(cls.id, studentId, true)}
+                                              >
+                                                <Check className="h-2.5 w-2.5 sm:h-3 sm:w-3 mr-0.5 sm:mr-1" />
+                                                <span className="hidden xs:inline">Approve</span>
+                                              </Button>
+                                              <Button 
+                                                size="sm"
+                                                variant="outline" 
+                                                className="h-6 sm:h-8 px-1 sm:px-2 text-[10px] sm:text-xs text-red-600 hover:bg-red-50 hover:text-red-700"
+                                                onClick={() => handleEnrollmentRequest(cls.id, studentId, false)}
+                                              >
+                                                <X className="h-2.5 w-2.5 sm:h-3 sm:w-3 mr-0.5 sm:mr-1" />
+                                                <span className="hidden xs:inline">Reject</span>
+                                              </Button>
+                                            </div>
+                                          </TableCell>
+                                        </TableRow>
+                                      ))
+                                    ) : (
+                                      <TableRow>
+                                        <TableCell colSpan={2} className="text-center py-3 text-xs sm:text-sm text-muted-foreground">
+                                          No pending requests match your search
+                                        </TableCell>
+                                      </TableRow>
+                                    )}
+                                  </TableBody>
+                                </Table>
+                              </div>
+                              
+                              {pendingSearchQuery && cls.pendingStudents && cls.pendingStudents.length > 0 && (
+                                <p className="text-[10px] sm:text-xs text-muted-foreground mt-1">
+                                  Showing {getFilteredStudents(cls.pendingStudents, pendingSearchQuery).length} of {cls.pendingStudents.length} pending requests
+                                </p>
+                              )}
+                            </div>
+                          )}
+                        </TabsContent>
+                      </Tabs>
+                      
+                      {cls.password && (
+                        <div className="mt-2 sm:mt-4 flex items-center">
+                          <Lock className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground mr-1" />
+                          <span className="text-[10px] sm:text-xs text-muted-foreground">Password protected</span>
+                        </div>
+                      )}
+                    </CardContent>
+                    
+                    {cls.isActive && (
+                      <CardFooter className="bg-green-50 border-t border-green-100 flex items-center px-3 py-2 sm:px-6 sm:py-3">
+                        <Clock className="h-3 w-3 sm:h-4 sm:w-4 text-green-600 mr-1 sm:mr-2" />
+                        <span className="text-[10px] sm:text-xs text-green-700">
+                          Attendance session active
+                          {cls.startTime && ` (Started: ${new Date(cls.startTime.toDate()).toLocaleTimeString()})`}
+                          {cls.endTime && ` - Ends: ${new Date(cls.endTime.toDate()).toLocaleTimeString()}`}
+                        </span>
+                      </CardFooter>
+                    )}
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </>
+    );
+  };
+
+  // Make the class selector responsive
   const renderAdminClassSelector = () => {
     return (
       <Dialog open={passwordDialogOpen} onOpenChange={setPasswordDialogOpen}>
-        <Card className="mb-6">
-          <CardHeader className="pb-2">
-            <CardTitle>Class Access Control</CardTitle>
-            <CardDescription>Select a class to manage and enter the password if required</CardDescription>
+        <Card className="mb-3 sm:mb-6">
+          <CardHeader className="pb-1 sm:pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
+            <CardTitle className="text-base sm:text-lg">Class Access Control</CardTitle>
+            <CardDescription className="text-xs sm:text-sm">Select a class to manage and enter the password if required</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="flex items-center space-x-2">
+          <CardContent className="px-3 py-2 sm:px-6 sm:py-3">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-2">
               <select
-                className="border rounded-md px-3 py-2 flex-1 bg-background"
+                className="border rounded-md px-2 sm:px-3 py-1 sm:py-2 flex-1 bg-background text-xs sm:text-sm w-full"
                 value={selectedClassId}
                 onChange={(e) => {
                   if (e.target.value) {
@@ -834,24 +1276,27 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onClassSelect }) => {
                   </option>
                 ))}
               </select>
-              <Button onClick={() => {
-                setSelectedClassId('');
-                setSelectedAdminClass(null);
-                localStorage.removeItem('selectedAdminClassId');
-                if (onClassSelect) {
-                  onClassSelect({} as Class);
-                }
-              }}>
+              <Button 
+                onClick={() => {
+                  setSelectedClassId('');
+                  setSelectedAdminClass(null);
+                  localStorage.removeItem('selectedAdminClassId');
+                  if (onClassSelect) {
+                    onClassSelect({} as Class);
+                  }
+                }}
+                className="w-full sm:w-auto text-xs sm:text-sm h-8 sm:h-9"
+              >
                 Clear
               </Button>
             </div>
             
             {selectedAdminClass && (
-              <div className="mt-4 p-3 bg-blue-50 border border-blue-100 rounded-md">
-                <p className="font-medium text-blue-800">
+              <div className="mt-2 sm:mt-4 p-2 sm:p-3 bg-blue-50 border border-blue-100 rounded-md">
+                <p className="font-medium text-xs sm:text-sm text-blue-800">
                   Currently managing: {selectedAdminClass.name}
                 </p>
-                <p className="text-sm text-blue-600">
+                <p className="text-[10px] sm:text-xs text-blue-600">
                   {selectedAdminClass.description || "No description"}
                 </p>
               </div>
@@ -859,38 +1304,46 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onClassSelect }) => {
           </CardContent>
         </Card>
         
-        <DialogContent>
+        <DialogContent className="max-w-sm sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Enter Class Password</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-base sm:text-lg">Enter Class Password</DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm">
               This class requires a password for admin access.
             </DialogDescription>
           </DialogHeader>
           
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="classPassword">Password</Label>
+          <div className="space-y-3 sm:space-y-4 py-2 sm:py-4">
+            <div className="space-y-1 sm:space-y-2">
+              <Label htmlFor="classPassword" className="text-sm sm:text-base">Password</Label>
               <Input 
                 id="classPassword" 
                 type="password"
                 placeholder="Enter class password" 
                 value={adminAccessPassword}
                 onChange={(e) => setAdminAccessPassword(e.target.value)}
+                className="h-8 sm:h-9 text-xs sm:text-sm"
               />
             </div>
           </div>
           
-          <DialogFooter>
-            <Button variant="outline" onClick={() => {
-              setPasswordDialogOpen(false);
-              setSelectedClassId('');
-            }}>
+          <DialogFooter className="gap-1 sm:gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setPasswordDialogOpen(false);
+                setSelectedClassId('');
+              }}
+              className="text-xs sm:text-sm h-7 sm:h-9"
+            >
               Cancel
             </Button>
-            <Button onClick={() => {
-              verifyAdminClassAccess(selectedClassId, adminAccessPassword);
-              setPasswordDialogOpen(false);
-            }}>
+            <Button 
+              onClick={() => {
+                verifyAdminClassAccess(selectedClassId, adminAccessPassword);
+                setPasswordDialogOpen(false);
+              }}
+              className="text-xs sm:text-sm h-7 sm:h-9"
+            >
               Access Class
             </Button>
           </DialogFooter>
@@ -899,432 +1352,32 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onClassSelect }) => {
     );
   };
 
-  // Admin view
-  const renderAdminView = () => {
-    return (
-      <>
-        {renderAdminClassSelector()}
-        
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-bold">Class Management</h2>
-          <div className="space-x-2">
-            <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-              <DialogTrigger asChild>
-                <Button className="flex items-center">
-                  <Plus className="mr-2 h-4 w-4" /> Create Class
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Create New Class</DialogTitle>
-                  <DialogDescription>
-                    Create a new class for students to enroll in.
-                  </DialogDescription>
-                </DialogHeader>
-                
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Class Name</Label>
-                    <Input 
-                      id="name" 
-                      placeholder="Enter class name" 
-                      value={newClassName}
-                      onChange={(e) => setNewClassName(e.target.value)}
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="description">Description (Optional)</Label>
-                    <Textarea 
-                      id="description" 
-                      placeholder="Enter class description" 
-                      value={newClassDescription}
-                      onChange={(e) => setNewClassDescription(e.target.value)}
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="password">Class Password (Required for Admin Access)</Label>
-                    <Input 
-                      id="password" 
-                      type="password"
-                      placeholder="Set a password" 
-                      value={newClassPassword}
-                      onChange={(e) => setNewClassPassword(e.target.value)}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      This password will be used by other admins to access and manage this class.
-                    </p>
-                  </div>
-                </div>
-                
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>Cancel</Button>
-                  <Button onClick={createClass}>Create Class</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          </div>
-        </div>
-        
-        {!selectedAdminClass ? (
-          <Card className="mb-6">
-            <CardContent className="py-8 text-center">
-              <p className="text-muted-foreground">Please select a class to manage from the dropdown above.</p>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-4">
-            {loading ? (
-              <div className="flex justify-center py-8">
-                <RefreshCcw className="h-8 w-8 animate-spin text-muted-foreground" />
-              </div>
-            ) : classes.length === 0 ? (
-              <Card>
-                <CardContent className="py-8 text-center">
-                  <p className="text-muted-foreground">No classes found. Create your first class.</p>
-                </CardContent>
-              </Card>
-            ) : (
-              <div>
-                {classes.filter(cls => cls.id === selectedClassId).map((cls) => (
-                  <Card key={cls.id} className="mb-4">
-                    <CardHeader className="pb-2">
-                      <div className="flex justify-between">
-                        <div>
-                          <CardTitle>{cls.name}</CardTitle>
-                          <CardDescription>
-                            Created by: {cls.creatorEmail}
-                          </CardDescription>
-                        </div>
-                        <div className="space-x-2">
-                          {cls.isActive ? (
-                            <></>
-                          ) : (
-                            <Dialog open={startAttendanceOpen} onOpenChange={setStartAttendanceOpen}>
-                              <DialogTrigger asChild>
-                              </DialogTrigger>
-                              <DialogContent>
-                                <DialogHeader>
-                                  <DialogTitle>Start Attendance Session</DialogTitle>
-                                  <DialogDescription>
-                                    Configure the attendance session for {cls.name}.
-                                  </DialogDescription>
-                                </DialogHeader>
-                                
-                                <div className="space-y-4 py-4">
-                                  <div className="space-y-2">
-                                    <Label htmlFor="duration">Session Duration (minutes)</Label>
-                                    <Input 
-                                      id="duration" 
-                                      type="number"
-                                      min="0"
-                                      placeholder="Duration in minutes (0 for no limit)" 
-                                      value={activeClassDuration}
-                                      onChange={(e) => setActiveClassDuration(parseInt(e.target.value) || 0)}
-                                    />
-                                    <p className="text-xs text-muted-foreground">
-                                      Set to 0 for unlimited duration (manual end).
-                                    </p>
-                                  </div>
-                                </div>
-                                
-                                <DialogFooter>
-                                  <Button variant="outline" onClick={() => setStartAttendanceOpen(false)}>Cancel</Button>
-                                  <Button onClick={() => startAttendance(cls.id)}>Start Session</Button>
-                                </DialogFooter>
-                              </DialogContent>
-                            </Dialog>
-                          )}
-                          
-                          <Button 
-                            variant="outline" 
-                            onClick={() => deleteClass(cls.id)}
-                            disabled={cls.isActive}
-                          >
-                            Delete
-                          </Button>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      {cls.description && <p className="mb-4 text-muted-foreground">{cls.description}</p>}
-                      
-                      <div className="mt-4">
-                        <h3 className="font-semibold mb-2">
-                          <Users className="h-4 w-4 inline mr-1" /> 
-                          Enrolled Students ({cls.students?.length || 0})
-                        </h3>
-                        
-                        {!cls.students || cls.students.length === 0 ? (
-                          <p className="text-sm text-muted-foreground">No students enrolled yet.</p>
-                        ) : (
-                          <div className="text-sm">
-                            <div className="mb-2">
-                              <div className="relative">
-                                <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                <Input
-                                  placeholder="Search students by email, name or roll number..."
-                                  className="pl-8"
-                                  value={studentSearchQuery}
-                                  onChange={(e) => setStudentSearchQuery(e.target.value)}
-                                />
-                                {studentSearchQuery && (
-                                  <Button 
-                                    variant="ghost" 
-                                    size="sm" 
-                                    className="absolute right-0 top-0 h-full px-3"
-                                    onClick={() => setStudentSearchQuery('')}
-                                  >
-                                    <X className="h-4 w-4" />
-                                  </Button>
-                                )}
-                              </div>
-                            </div>
-                            
-                            <div className="rounded-md border max-h-[400px] overflow-y-auto">
-                              <Table>
-                                <TableHeader className="sticky top-0 bg-background z-10">
-                                  <TableRow>
-                                    <TableHead className="bg-muted">Student Email</TableHead>
-                                    <TableHead className="bg-muted">Status</TableHead>
-                                    <TableHead className="bg-muted">Actions</TableHead>
-                                  </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                  {getFilteredStudents(cls.students, studentSearchQuery).length > 0 ? (
-                                    getFilteredStudents(cls.students, studentSearchQuery).map(studentId => {
-                                      const studentEmail = userDetails[studentId]?.email || studentId;
-                                      const isUserAdmin = userDetails[studentId]?.isAdmin === true;
-                                      
-                                      return (
-                                        <TableRow key={studentId}>
-                                          <TableCell>{studentEmail}</TableCell>
-                                          <TableCell>
-                                            <div className="flex items-center space-x-2">
-                                              <Badge variant="outline" className="bg-green-50 text-green-700">
-                                                Enrolled
-                                              </Badge>
-                                              {isUserAdmin && (
-                                                <Badge variant="outline" className="bg-blue-50 text-blue-700">
-                                                  Admin
-                                                </Badge>
-                                              )}
-                                            </div>
-                                          </TableCell>
-                                          <TableCell className="flex items-center space-x-2">
-                                            <Button 
-                                              size="sm"
-                                              variant="outline"
-                                              className="flex items-center text-orange-600 hover:text-orange-700 transition-all duration-200 active:scale-95 hover:bg-orange-50"
-                                              onClick={(e) => {
-                                                // Animation code
-                                                const button = e.currentTarget;
-                                                button.classList.add('scale-95');
-                                                button.classList.add('bg-orange-100');
-                                                setTimeout(() => {
-                                                  button.classList.remove('scale-95');
-                                                  button.classList.remove('bg-orange-100');
-                                                }, 300);
-                                                
-                                                resetDeviceId(studentId, studentEmail);
-                                              }}
-                                            >
-                                              <Smartphone className="h-3 w-3 mr-1" />
-                                              Reset Device
-                                            </Button>
-                                            
-                                            {isUserAdmin ? (
-                                              <Button 
-                                                size="sm"
-                                                variant="outline"
-                                                className="flex items-center text-red-600 hover:text-red-700 transition-all duration-200 active:scale-95 hover:bg-red-50"
-                                                onClick={(e) => {
-                                                  // Animation code
-                                                  const button = e.currentTarget;
-                                                  button.classList.add('scale-95');
-                                                  button.classList.add('bg-red-100');
-                                                  setTimeout(() => {
-                                                    button.classList.remove('scale-95');
-                                                    button.classList.remove('bg-red-100');
-                                                  }, 300);
-                                                  
-                                                  removeUserAsAdmin(studentId, studentEmail);
-                                                }}
-                                              >
-                                                <UserPlus className="h-3 w-3 mr-1" />
-                                                Remove Admin
-                                              </Button>
-                                            ) : (
-                                              <Button 
-                                                size="sm"
-                                                variant="outline"
-                                                className="flex items-center text-blue-600 hover:text-blue-700 transition-all duration-200 active:scale-95 hover:bg-blue-50"
-                                                onClick={(e) => {
-                                                  // Animation code
-                                                  const button = e.currentTarget;
-                                                  button.classList.add('scale-95');
-                                                  button.classList.add('bg-blue-100');
-                                                  setTimeout(() => {
-                                                    button.classList.remove('scale-95');
-                                                    button.classList.remove('bg-blue-100');
-                                                  }, 300);
-                                                  
-                                                  setUserAsAdmin(studentId, studentEmail);
-                                                }}
-                                              >
-                                                <UserPlus className="h-3 w-3 mr-1" />
-                                                Set as Admin
-                                              </Button>
-                                            )}
-                                          </TableCell>
-                                        </TableRow>
-                                      );
-                                    })
-                                  ) : (
-                                    <TableRow>
-                                      <TableCell colSpan={3} className="text-center py-4 text-muted-foreground">
-                                        No students match your search
-                                      </TableCell>
-                                    </TableRow>
-                                  )}
-                                </TableBody>
-                              </Table>
-                            </div>
-                            
-                            {studentSearchQuery && cls.students && cls.students.length > 0 && (
-                              <p className="text-xs text-muted-foreground mt-1">
-                                Showing {getFilteredStudents(cls.students, studentSearchQuery).length} of {cls.students.length} students
-                              </p>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                      
-                      {cls.pendingStudents && cls.pendingStudents.length > 0 && (
-                        <div className="mt-4 border-t pt-4">
-                          <h3 className="font-semibold mb-2">
-                            <AlertCircle className="h-4 w-4 inline mr-1" /> 
-                            Pending Enrollment Requests ({cls.pendingStudents.length})
-                          </h3>
-                          
-                          <div className="mb-2">
-                            <div className="relative">
-                              <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                              <Input
-                                placeholder="Search pending requests..."
-                                className="pl-8"
-                                value={pendingSearchQuery}
-                                onChange={(e) => setPendingSearchQuery(e.target.value)}
-                              />
-                              {pendingSearchQuery && (
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm" 
-                                  className="absolute right-0 top-0 h-full px-3"
-                                  onClick={() => setPendingSearchQuery('')}
-                                >
-                                  <X className="h-4 w-4" />
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                          
-                          <div className="max-h-[300px] overflow-y-auto pr-1">
-                            <div className="space-y-2">
-                              {getFilteredStudents(cls.pendingStudents, pendingSearchQuery).length > 0 ? (
-                                getFilteredStudents(cls.pendingStudents, pendingSearchQuery).map(studentId => (
-                                  <div key={studentId} className="flex items-center justify-between bg-muted p-2 rounded-md">
-                                    <span className="text-sm truncate max-w-[400px]">{userDetails[studentId]?.email || studentId}</span>
-                                    <div className="space-x-2">
-                                      <Button 
-                                        size="sm"
-                                        variant="outline" 
-                                        className="text-green-600"
-                                        onClick={() => handleEnrollmentRequest(cls.id, studentId, true)}
-                                      >
-                                        <Check className="h-4 w-4" />
-                                      </Button>
-                                      <Button 
-                                        size="sm"
-                                        variant="outline" 
-                                        className="text-red-600"
-                                        onClick={() => handleEnrollmentRequest(cls.id, studentId, false)}
-                                      >
-                                        <X className="h-4 w-4" />
-                                      </Button>
-                                    </div>
-                                  </div>
-                                ))
-                              ) : (
-                                <div className="text-center py-4 text-muted-foreground">
-                                  No pending requests match your search
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                          
-                          {pendingSearchQuery && cls.pendingStudents && cls.pendingStudents.length > 0 && (
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Showing {getFilteredStudents(cls.pendingStudents, pendingSearchQuery).length} of {cls.pendingStudents.length} pending requests
-                            </p>
-                          )}
-                        </div>
-                      )}
-                      
-                      {cls.password && (
-                        <div className="mt-4 flex items-center">
-                          <Lock className="h-4 w-4 text-muted-foreground mr-1" />
-                          <span className="text-xs text-muted-foreground">Password protected</span>
-                        </div>
-                      )}
-                    </CardContent>
-                    {cls.isActive && (
-                      <CardFooter className="bg-green-50 border-t border-green-100 flex items-center">
-                        <Clock className="h-4 w-4 text-green-600 mr-2" />
-                        <span className="text-green-700">
-                          Attendance session active
-                          {cls.startTime && ` (Started: ${new Date(cls.startTime.toDate()).toLocaleTimeString()})`}
-                          {cls.endTime && ` - Ends: ${new Date(cls.endTime.toDate()).toLocaleTimeString()}`}
-                        </span>
-                      </CardFooter>
-                    )}
-                  </Card>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </>
-    );
-  };
-
-  // Student view
+  // Make the student view responsive
   const renderStudentView = () => {
     return (
       <>
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-bold">My Classes</h2>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-2 sm:mb-4 gap-2 sm:gap-0">
+          <h2 className="text-lg sm:text-xl font-bold">My Classes</h2>
           <Dialog open={joinDialogOpen} onOpenChange={setJoinDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="flex items-center">
-                <Plus className="mr-2 h-4 w-4" /> Join Class
+              <Button className="flex items-center w-full sm:w-auto text-xs sm:text-sm h-8 sm:h-9">
+                <Plus className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" /> Join Class
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-sm sm:max-w-md">
               <DialogHeader>
-                <DialogTitle>Join a Class</DialogTitle>
-                <DialogDescription>
+                <DialogTitle className="text-base sm:text-lg">Join a Class</DialogTitle>
+                <DialogDescription className="text-xs sm:text-sm">
                   Select a class to join from the available classes.
                 </DialogDescription>
               </DialogHeader>
               
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label htmlFor="classId">Select Class</Label>
+              <div className="space-y-3 sm:space-y-4 py-2 sm:py-4">
+                <div className="space-y-1 sm:space-y-2">
+                  <Label htmlFor="classId" className="text-sm sm:text-base">Select Class</Label>
                   <select
                     id="classId"
-                    className="w-full border border-input bg-background px-3 py-2 rounded-md"
+                    className="w-full border border-input bg-background px-2 sm:px-3 py-1 sm:py-2 rounded-md text-xs sm:text-sm"
                     value={joinClassId}
                     onChange={(e) => setJoinClassId(e.target.value)}
                   >
@@ -1336,28 +1389,39 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onClassSelect }) => {
                 </div>
               </div>
               
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setJoinDialogOpen(false)}>Cancel</Button>
-                <Button onClick={handleDialogJoin}>Send Join Request</Button>
+              <DialogFooter className="gap-1 sm:gap-2">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setJoinDialogOpen(false)}
+                  className="text-xs sm:text-sm h-7 sm:h-9"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={handleDialogJoin}
+                  className="text-xs sm:text-sm h-7 sm:h-9"
+                >
+                  Send Join Request
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
         </div>
         
         <Tabs defaultValue="all">
-          <TabsList className="mb-4">
-            <TabsTrigger value="all">All Classes</TabsTrigger>
-            <TabsTrigger value="enrolled">My Enrolled Classes</TabsTrigger>
-            <TabsTrigger value="pending">Pending Enrollment</TabsTrigger>
+          <TabsList className="mb-2 sm:mb-4 h-8 sm:h-10">
+            <TabsTrigger value="all" className="text-xs sm:text-sm">All Classes</TabsTrigger>
+            <TabsTrigger value="enrolled" className="text-xs sm:text-sm">My Enrolled Classes</TabsTrigger>
+            <TabsTrigger value="pending" className="text-xs sm:text-sm">Pending Enrollment</TabsTrigger>
           </TabsList>
           
           <TabsContent value="all">
-            <div className="mb-4">
+            <div className="mb-2 sm:mb-4">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Search className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
                 <Input
                   placeholder="Search classes by name or description..."
-                  className="pl-10"
+                  className="pl-7 sm:pl-10 h-7 sm:h-9 text-xs sm:text-sm"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
@@ -1365,44 +1429,44 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onClassSelect }) => {
             </div>
             
             {loading ? (
-              <div className="flex justify-center py-8">
-                <RefreshCcw className="h-8 w-8 animate-spin text-muted-foreground" />
+              <div className="flex justify-center py-4 sm:py-8">
+                <RefreshCcw className="h-6 w-6 sm:h-8 sm:w-8 animate-spin text-muted-foreground" />
               </div>
             ) : filteredClasses.length === 0 ? (
               <Card>
-                <CardContent className="py-8 text-center">
-                  <p className="text-muted-foreground">No classes found matching your search.</p>
+                <CardContent className="py-4 sm:py-8 text-center">
+                  <p className="text-xs sm:text-sm text-muted-foreground">No classes found matching your search.</p>
                 </CardContent>
               </Card>
             ) : (
-              <div className="max-h-[600px] overflow-y-auto pr-2">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="max-h-[500px] sm:max-h-[600px] overflow-y-auto pr-1 sm:pr-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-4">
                   {filteredClasses.map((cls) => {
                     const isEnrolled = cls.students && cls.students.includes(currentUser?.uid || '');
                     const isPending = cls.pendingStudents && cls.pendingStudents.includes(currentUser?.uid || '');
                     
                     return (
-                      <Card key={cls.id}>
-                        <CardHeader>
-                          <CardTitle>{cls.name}</CardTitle>
-                          <CardDescription>
+                      <Card key={cls.id} className="overflow-hidden">
+                        <CardHeader className="px-3 py-2 sm:px-6 sm:py-3">
+                          <CardTitle className="text-sm sm:text-base">{cls.name}</CardTitle>
+                          <CardDescription className="text-xs sm:text-sm">
                             Instructor: {cls.creatorEmail}
                           </CardDescription>
                         </CardHeader>
-                        <CardContent>
-                          {cls.description && <p className="mb-4">{cls.description}</p>}
-                          <div className="flex items-center text-sm text-muted-foreground">
-                            <Users className="h-4 w-4 mr-1" />
+                        <CardContent className="px-3 py-2 sm:px-6 sm:py-3">
+                          {cls.description && <p className="mb-2 sm:mb-4 text-xs sm:text-sm line-clamp-2">{cls.description}</p>}
+                          <div className="flex items-center text-xs text-muted-foreground">
+                            <Users className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
                             <span>{cls.students?.length || 0} students enrolled</span>
                           </div>
                         </CardContent>
-                        <CardFooter className="flex justify-between">
+                        <CardFooter className="flex justify-between px-3 py-2 sm:px-6 sm:py-3 bg-muted/10">
                           {isEnrolled ? (
-                            <Badge variant="outline" className="bg-green-50 text-green-700">
+                            <Badge variant="outline" className="bg-green-50 text-green-700 text-[10px] sm:text-xs">
                               Enrolled
                             </Badge>
                           ) : isPending ? (
-                            <Badge variant="outline" className="bg-yellow-50 text-yellow-700">
+                            <Badge variant="outline" className="bg-yellow-50 text-yellow-700 text-[10px] sm:text-xs">
                               Pending Approval
                             </Badge>
                           ) : (
@@ -1412,13 +1476,14 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onClassSelect }) => {
                                 setJoinClassId(cls.id);
                                 setJoinDialogOpen(true);
                               }}
+                              className="h-7 sm:h-8 text-[10px] sm:text-xs"
                             >
                               Join Class
                             </Button>
                           )}
                           
                           {cls.isActive && (
-                            <Badge className="bg-green-100 text-green-800">
+                            <Badge className="bg-green-100 text-green-800 text-[10px] sm:text-xs">
                               Active
                             </Badge>
                           )}
@@ -1433,33 +1498,33 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onClassSelect }) => {
           
           <TabsContent value="enrolled">
             {loading ? (
-              <div className="flex justify-center py-8">
-                <RefreshCcw className="h-8 w-8 animate-spin text-muted-foreground" />
+              <div className="flex justify-center py-4 sm:py-8">
+                <RefreshCcw className="h-6 w-6 sm:h-8 sm:w-8 animate-spin text-muted-foreground" />
               </div>
             ) : enrolledClasses.length === 0 ? (
               <Card>
-                <CardContent className="py-8 text-center">
-                  <p className="text-muted-foreground">You are not enrolled in any classes yet.</p>
+                <CardContent className="py-4 sm:py-8 text-center">
+                  <p className="text-xs sm:text-sm text-muted-foreground">You are not enrolled in any classes yet.</p>
                 </CardContent>
               </Card>
             ) : (
-              <div className="max-h-[600px] overflow-y-auto pr-2 space-y-4">
+              <div className="max-h-[500px] sm:max-h-[600px] overflow-y-auto pr-1 sm:pr-2 space-y-2 sm:space-y-4">
                 {enrolledClasses.map((cls) => (
                   <Card key={cls.id}>
-                    <CardHeader>
-                      <CardTitle>{cls.name}</CardTitle>
-                      <CardDescription>
+                    <CardHeader className="px-3 py-2 sm:px-6 sm:py-3">
+                      <CardTitle className="text-sm sm:text-base">{cls.name}</CardTitle>
+                      <CardDescription className="text-xs sm:text-sm">
                         Instructor: {cls.creatorEmail}
                       </CardDescription>
                     </CardHeader>
-                    <CardContent>
-                      {cls.description && <p className="mb-4">{cls.description}</p>}
+                    <CardContent className="px-3 py-2 sm:px-6 sm:py-3">
+                      {cls.description && <p className="mb-2 sm:mb-4 text-xs sm:text-sm">{cls.description}</p>}
                     </CardContent>
                     {cls.isActive && (
-                      <CardFooter className="bg-green-50 border-t border-green-100">
+                      <CardFooter className="bg-green-50 border-t border-green-100 px-3 py-2 sm:px-6 sm:py-3">
                         <div className="flex items-center">
-                          <Clock className="h-4 w-4 text-green-600 mr-2" />
-                          <span className="text-green-700">
+                          <Clock className="h-3 w-3 sm:h-4 sm:w-4 text-green-600 mr-1 sm:mr-2" />
+                          <span className="text-[10px] sm:text-xs text-green-700">
                             Attendance session active
                             {cls.startTime && ` (Started: ${new Date(cls.startTime.toDate()).toLocaleTimeString()})`}
                           </span>
@@ -1474,28 +1539,28 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onClassSelect }) => {
           
           <TabsContent value="pending">
             {loading ? (
-              <div className="flex justify-center py-8">
-                <RefreshCcw className="h-8 w-8 animate-spin text-muted-foreground" />
+              <div className="flex justify-center py-4 sm:py-8">
+                <RefreshCcw className="h-6 w-6 sm:h-8 sm:w-8 animate-spin text-muted-foreground" />
               </div>
             ) : pendingClasses.length === 0 ? (
               <Card>
-                <CardContent className="py-8 text-center">
-                  <p className="text-muted-foreground">You don't have any pending enrollment requests.</p>
+                <CardContent className="py-4 sm:py-8 text-center">
+                  <p className="text-xs sm:text-sm text-muted-foreground">You don't have any pending enrollment requests.</p>
                 </CardContent>
               </Card>
             ) : (
-              <div className="max-h-[600px] overflow-y-auto pr-2 space-y-4">
+              <div className="max-h-[500px] sm:max-h-[600px] overflow-y-auto pr-1 sm:pr-2 space-y-2 sm:space-y-4">
                 {pendingClasses.map((cls) => (
                   <Card key={cls.id}>
-                    <CardHeader>
-                      <CardTitle>{cls.name}</CardTitle>
-                      <CardDescription>
+                    <CardHeader className="px-3 py-2 sm:px-6 sm:py-3">
+                      <CardTitle className="text-sm sm:text-base">{cls.name}</CardTitle>
+                      <CardDescription className="text-xs sm:text-sm">
                         Instructor: {cls.creatorEmail}
                       </CardDescription>
                     </CardHeader>
-                    <CardContent>
-                      {cls.description && <p className="mb-4">{cls.description}</p>}
-                      <Badge variant="outline" className="bg-yellow-50 text-yellow-700">
+                    <CardContent className="px-3 py-2 sm:px-6 sm:py-3">
+                      {cls.description && <p className="mb-2 sm:mb-4 text-xs sm:text-sm">{cls.description}</p>}
+                      <Badge variant="outline" className="bg-yellow-50 text-yellow-700 text-[10px] sm:text-xs">
                         Pending Approval
                       </Badge>
                     </CardContent>
@@ -1509,9 +1574,120 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onClassSelect }) => {
     );
   };
 
+  // Add dialog for starting attendance
+  const AttendanceStartDialog = () => (
+    <Dialog open={startAttendanceDialogOpen} onOpenChange={setStartAttendanceDialogOpen}>
+      <DialogContent className="max-w-sm sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-base sm:text-lg">Start Attendance Session</DialogTitle>
+          <DialogDescription className="text-xs sm:text-sm">
+            Set the duration for this attendance session.
+          </DialogDescription>
+        </DialogHeader>
+        
+        <div className="space-y-3 sm:space-y-4 py-2 sm:py-4">
+          <div className="space-y-1 sm:space-y-2">
+            <Label htmlFor="duration" className="text-sm sm:text-base">Session Duration (minutes)</Label>
+            <Input
+              id="duration"
+              type="number"
+              placeholder="60"
+              min="1"
+              value={activeClassDuration.toString()}
+              onChange={(e) => setActiveClassDuration(parseInt(e.target.value) || 60)}
+              className="h-8 sm:h-9 text-xs sm:text-sm"
+            />
+            <p className="text-[10px] sm:text-xs text-muted-foreground">
+              Set to 0 for unlimited duration (manual ending)
+            </p>
+          </div>
+        </div>
+        
+        <DialogFooter className="gap-1 sm:gap-2">
+          <Button 
+            variant="outline" 
+            onClick={() => setStartAttendanceDialogOpen(false)}
+            className="text-xs sm:text-sm h-7 sm:h-9"
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={() => {
+              startAttendance(classIdToStartAttendance);
+              setStartAttendanceDialogOpen(false);
+            }}
+            className="text-xs sm:text-sm h-7 sm:h-9"
+          >
+            Start Session
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
+  // Add dialog for deleting class
+  const DeleteClassDialog = () => (
+    <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      <DialogContent className="max-w-sm sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-base sm:text-lg text-red-600">Delete Class</DialogTitle>
+          <DialogDescription className="text-xs sm:text-sm">
+            This action cannot be undone. Please enter the class password to confirm deletion.
+          </DialogDescription>
+        </DialogHeader>
+        
+        <div className="space-y-3 sm:space-y-4 py-2 sm:py-4">
+          <div className="space-y-1 sm:space-y-2">
+            <Label htmlFor="deletePassword" className="text-sm sm:text-base">Class Password</Label>
+            <Input
+              id="deletePassword"
+              type="password"
+              placeholder="Enter class password"
+              value={deletePassword}
+              onChange={(e) => setDeletePassword(e.target.value)}
+              className="h-8 sm:h-9 text-xs sm:text-sm"
+            />
+            {deleteError && (
+              <p className="text-[10px] sm:text-xs text-red-600 mt-1">
+                {deleteError}
+              </p>
+            )}
+            <p className="text-[10px] sm:text-xs text-muted-foreground">
+              Note: Class creators can delete without password verification.
+            </p>
+          </div>
+        </div>
+        
+        <DialogFooter className="gap-1 sm:gap-2">
+          <Button 
+            variant="outline" 
+            onClick={() => {
+              setDeleteDialogOpen(false);
+              setDeletePassword('');
+              setDeleteError('');
+            }}
+            className="text-xs sm:text-sm h-7 sm:h-9"
+          >
+            Cancel
+          </Button>
+          <Button 
+            variant="destructive"
+            onClick={() => deleteClass(classIdToDelete, deletePassword)}
+            disabled={!classIdToDelete}
+            className="text-xs sm:text-sm h-7 sm:h-9"
+          >
+            Delete Class
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
   return (
-    <div>
+    <div className="p-2 sm:p-4">
       {currentUser?.isAdmin ? renderAdminView() : renderStudentView()}
+      <AttendanceStartDialog />
+      <DeleteClassDialog />
     </div>
   );
 };

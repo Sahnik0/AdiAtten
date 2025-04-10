@@ -110,8 +110,8 @@ const MeetTheMaker = () => {
                     <div>
                       <h3 className="text-lg font-semibold text-blue-700">My Journey</h3>
                       <p className="mt-1">
-                        As a student who observed the challenges in traditional attendance systems, I was inspired to create 
-                        a solution that leverages modern technology. AdiAtten is the result of countless hours of research, 
+                        As a Class Representative who observed the challenges in traditional attendance systems, I was inspired to create 
+                        a solution that leverages modern technology. AdiAtten is the result of countless hours hard work, 
                         design, and development, reflecting my commitment to solving real-world problems.
                       </p>
                     </div>
