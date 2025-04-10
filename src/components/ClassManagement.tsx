@@ -726,6 +726,90 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onClassSelect }) => {
     }
   };
 
+  // Reset all device IDs (admin only)
+  const resetAllDeviceIds = async (classId: string) => {
+    if (!currentUser || !currentUser.isAdmin) return;
+    
+    try {
+      const classRef = doc(firestore, 'classes', classId);
+      const classDoc = await getDoc(classRef);
+      
+      if (!classDoc.exists()) {
+        toast({
+          title: "Error",
+          description: "Class not found.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      const classData = classDoc.data() as Class;
+      const students = classData.students || [];
+      
+      if (students.length === 0) {
+        toast({
+          title: "Info",
+          description: "No students to reset device IDs for.",
+        });
+        return;
+      }
+      
+      // Show confirmation dialog
+      if (!window.confirm(`Are you sure you want to reset device IDs for all ${students.length} students in this class? This will allow them to mark attendance from a different device.`)) {
+        return;
+      }
+      
+      // Update all students in batches to avoid too many parallel requests
+      const batchSize = 10;
+      let successCount = 0;
+      
+      for (let i = 0; i < students.length; i += batchSize) {
+        const batch = students.slice(i, i + batchSize);
+        const promises = batch.map(studentId => {
+          const userRef = doc(firestore, 'users', studentId);
+          return updateDoc(userRef, { deviceId: null })
+            .then(() => {
+              successCount++;
+              // Update local state
+              const updatedUserDetails = {...userDetails};
+              if (updatedUserDetails[studentId]) {
+                updatedUserDetails[studentId] = {
+                  ...updatedUserDetails[studentId],
+                  deviceId: null
+                };
+              }
+              return updatedUserDetails;
+            })
+            .catch(error => {
+              console.error(`Error resetting device ID for user ${studentId}:`, error);
+              return null;
+            });
+        });
+        
+        const results = await Promise.all(promises);
+        
+        // Update user details with the successful updates
+        results.forEach(updatedDetails => {
+          if (updatedDetails) {
+            setUserDetails(prev => ({...prev, ...updatedDetails}));
+          }
+        });
+      }
+      
+      toast({
+        title: "Success",
+        description: `Reset device IDs for ${successCount} students.`,
+      });
+    } catch (error) {
+      console.error("Error resetting all device IDs:", error);
+      toast({
+        title: "Error",
+        description: "Failed to reset all device IDs.",
+        variant: "destructive",
+      });
+    }
+  };
+
   // Set user as admin (admin only)
   const setUserAsAdmin = async (studentId: string, studentEmail: string) => {
     if (!currentUser || !currentUser.isAdmin) return;
@@ -949,16 +1033,19 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onClassSelect }) => {
                               End Attendance
                             </Button>
                           ) : (
-                            <Button 
-                              className="flex items-center text-xs sm:text-sm h-7 sm:h-9 px-2 sm:px-4"
-                              onClick={() => {
-                                setClassIdToStartAttendance(cls.id);
-                                setStartAttendanceDialogOpen(true);
-                              }}
-                            >
-                              Start Attendance
-                            </Button>
+                            <>
+                              
+                            </>
                           )}
+                          
+                          <Button
+                            variant="outline"
+                            onClick={() => resetAllDeviceIds(cls.id)}
+                            className="text-xs sm:text-sm h-7 sm:h-9 px-2 sm:px-4 whitespace-nowrap"
+                          >
+                            <Smartphone className="h-2.5 w-2.5 sm:h-3 sm:w-3 mr-1" />
+                            <span className="hidden xs:inline"></span>Reset All Device Id
+                          </Button>
                           
                           <Button 
                             variant="outline" 
