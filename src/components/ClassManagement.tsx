@@ -696,10 +696,8 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onClassSelect }) => {
         return;
       }
       
-      // Update user to admin status AND clear device ID
       await updateDoc(userRef, {
-        isAdmin: true,
-        deviceId: null  // Clear device ID when user becomes admin
+        isAdmin: true
       });
       
       toast({
@@ -712,8 +710,7 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onClassSelect }) => {
       if (updatedUserDetails[studentId]) {
         updatedUserDetails[studentId] = {
           ...updatedUserDetails[studentId],
-          isAdmin: true,
-          deviceId: null  // Also update local state
+          isAdmin: true
         };
         setUserDetails(updatedUserDetails);
       }
@@ -1441,25 +1438,6 @@ const storeDeviceId = async (userId: string, deviceId: string) => {
     });
   } catch (error) {
     console.error("Error storing device ID:", error);
-    throw error;
-  }
-};
-
-// In your authentication hook/service where deviceId is set during login
-const signIn = async (email: string, password: string) => {
-  try {
-    const userCredential = await signInWithEmailAndPassword(auth, email, password);
-    const user = userCredential.user;
-    
-    // Generate or retrieve device ID (e.g. from local storage or browser fingerprint)
-    const deviceId = generateDeviceId(); // Your existing device ID generation function
-    
-    // Store the device ID, this function now checks for admin status
-    await storeDeviceId(user.uid, deviceId);
-    
-    return user;
-  } catch (error) {
-    console.error("Error signing in:", error);
     throw error;
   }
 };
