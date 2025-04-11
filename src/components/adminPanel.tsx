@@ -508,98 +508,88 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
                   <div className="space-y-3 md:space-y-4">
                     <h3 className="font-medium text-sm md:text-base">Attendance History</h3>
                     
-                    {Object.entries(attendanceHistory.reduce((acc, record) => {
-                      const sessionId = record.sessionId || 'unknown';
-                      if (!acc[sessionId]) {
-                        acc[sessionId] = [];
-                      }
-                      acc[sessionId].push(record);
-                      return acc;
-                    }, {} as Record<string, AttendanceRecord[]>))
-                    .sort(([sessionIdA], [sessionIdB]) => sessionIdB.localeCompare(sessionIdA))
-                    .map(([sessionId, records]) => {
-                      const sessionDate = records[0]?.date || 'Unknown';
-                      const presentCount = records.filter(r => r.verified).length;
-                      const totalCount = records.length;
-                      
-                      return (
-                        <Card key={sessionId} className="mb-3">
-                          <CardHeader className="py-2 px-3 md:px-6">
-                            <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-2">
-                              <div>
-                                <CardTitle className="text-xs md:text-sm">
-                                  {sessionDate}
-                                </CardTitle>
-                                <CardDescription className="text-xs">
-                                  Present: {presentCount}/{totalCount} ({Math.round((presentCount/totalCount) * 100)}%)
-                                </CardDescription>
+                    <div className="max-h-[60vh] overflow-y-auto pr-1">
+                      {Object.entries(attendanceHistory.reduce((acc, record) => {
+                        const sessionId = record.sessionId || 'unknown';
+                        if (!acc[sessionId]) {
+                          acc[sessionId] = [];
+                        }
+                        acc[sessionId].push(record);
+                        return acc;
+                      }, {} as Record<string, AttendanceRecord[]>))
+                      .sort(([sessionIdA], [sessionIdB]) => sessionIdB.localeCompare(sessionIdA))
+                      .map(([sessionId, records]) => {
+                        const sessionDate = records[0]?.date || 'Unknown';
+                        const presentCount = records.filter(r => r.verified).length;
+                        const totalCount = records.length;
+                        
+                        return (
+                          <Card key={sessionId} className="mb-3">
+                            <CardHeader className="py-2 px-3 md:px-6">
+                              <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-2">
+                                <div>
+                                  <CardTitle className="text-xs md:text-sm">
+                                    {sessionDate}
+                                  </CardTitle>
+                                  <CardDescription className="text-xs">
+                                    Present: {presentCount}/{totalCount} ({Math.round((presentCount/totalCount) * 100)}%)
+                                  </CardDescription>
+                                </div>
+                                <Button 
+                                  size="sm" 
+                                  variant="outline" 
+                                  onClick={() => copySessionReportToClipboard(sessionId, records)}
+                                  className="text-xs w-full md:w-auto py-1"
+                                >
+                                  <ClipboardCopy className="h-3 w-3 mr-1" /> Copy Report
+                                </Button>
                               </div>
-                              <Button 
-                                size="sm" 
-                                variant="outline" 
-                                onClick={() => copySessionReportToClipboard(sessionId, records)}
-                                className="text-xs w-full md:w-auto py-1"
-                              >
-                                <ClipboardCopy className="h-3 w-3 mr-1" /> Copy Report
-                              </Button>
-                            </div>
-                          </CardHeader>
-                          <CardContent className="py-1 px-2 md:px-6">
-                            <div className="rounded-md border overflow-x-auto">
-                              <table className="w-full text-xs md:text-sm">
-                                <thead>
-                                  <tr className="border-b bg-muted/50">
-                                    <th className="px-2 md:px-4 py-1.5 md:py-2 text-left font-medium">Name</th>
-                                    <th className="px-2 md:px-4 py-1.5 md:py-2 text-left font-medium">Roll No</th>
-                                    <th className="px-2 md:px-4 py-1.5 md:py-2 text-left font-medium">Status</th>
-                                    <th className="px-1 md:px-4 py-1.5 md:py-2 text-left font-medium">Action</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {records.map((record) => (
-                                    <tr key={record.id} className="border-b">
-                                      <td className="px-2 md:px-4 py-1.5 md:py-2">
-                                        <div className="truncate max-w-[120px] md:max-w-none">
-                                          {record.userName}
-                                        </div>
-                                      </td>
-                                      <td className="px-2 md:px-4 py-1.5 md:py-2">{record.rollNumber || 'N/A'}</td>
-                                      <td className="px-2 md:px-4 py-1.5 md:py-2">
-                                        <span className={cn(
-                                          "px-1.5 py-0.5 rounded-full text-[10px] md:text-xs",
-                                          record.verified 
-                                            ? 'bg-green-100 text-green-800' 
-                                            : 'bg-red-100 text-red-800'
-                                        )}>
-                                          {record.verified ? 'Present' : 'Absent'}
-                                        </span>
-                                      </td>
-                                      <td className="px-1 md:px-4 py-1.5 md:py-2">
-                                        <Button 
-                                          variant="ghost" 
-                                          size="sm"
-                                          onClick={() => resetDeviceId(record.userId)}
-                                          title="Reset Device ID"
-                                          className="h-6 w-6 p-0"
-                                        >
-                                          <RefreshCcw className="h-3 w-3" />
-                                        </Button>
-                                      </td>
+                            </CardHeader>
+                            <CardContent className="py-1 px-2 md:px-6">
+                              <div className="rounded-md border overflow-x-auto">
+                                <table className="w-full text-xs md:text-sm">
+                                  <thead>
+                                    <tr className="border-b bg-muted/50">
+                                      <th className="px-2 md:px-4 py-1.5 md:py-2 text-left font-medium">Name</th>
+                                      <th className="px-2 md:px-4 py-1.5 md:py-2 text-left font-medium">Roll No</th>
+                                      <th className="px-2 md:px-4 py-1.5 md:py-2 text-left font-medium">Status</th>
                                     </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      );
-                    })}
+                                  </thead>
+                                  <tbody>
+                                    {records.map((record) => (
+                                      <tr key={record.id} className="border-b">
+                                        <td className="px-2 md:px-4 py-1.5 md:py-2">
+                                          <div className="truncate max-w-[120px] md:max-w-none">
+                                            {record.userName}
+                                          </div>
+                                        </td>
+                                        <td className="px-2 md:px-4 py-1.5 md:py-2">{record.rollNumber || 'N/A'}</td>
+                                        <td className="px-2 md:px-4 py-1.5 md:py-2">
+                                          <span className={cn(
+                                            "px-1.5 py-0.5 rounded-full text-[10px] md:text-xs",
+                                            record.verified 
+                                              ? 'bg-green-100 text-green-800' 
+                                              : 'bg-red-100 text-red-800'
+                                          )}>
+                                            {record.verified ? 'Present' : 'Absent'}
+                                          </span>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
               </div>
             </CardContent>
-            <CardFooter className="pt-2">
-              <Button variant="outline" onClick={fetchAttendanceHistory} size="sm" className="ml-auto text-xs md:text-sm">
+            <CardFooter className="pt-2 px-3 md:px-6">
+              <Button variant="outline" onClick={fetchAttendanceHistory} size="sm" className="ml-auto text-xs md:text-sm py-1">
                 <History className="h-3 w-3 mr-1.5" /> Refresh
               </Button>
             </CardFooter>
