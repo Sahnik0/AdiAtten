@@ -5,7 +5,7 @@ import LiveAttendanceSheet from '@/components/LiveAttendanceSheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/hooks/useAuth';
 import UserReports from '@/components/UserReports';
-import { collection, getDocs, query, where, doc, updateDoc, setDoc, serverTimestamp, getDoc, onSnapshot, arrayUnion } from 'firebase/firestore';
+import { collection, getDocs, query, where, doc, updateDoc, setDoc, serverTimestamp, getDoc, onSnapshot } from 'firebase/firestore';
 import { firestore, database } from '@/lib/firebase';
 import { AttendanceRecord } from '@/lib/types';
 import { Button } from '@/components/ui/button';
@@ -390,165 +390,85 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
     }
   };
 
-  const exportAttendanceToCsv = async () => {
-    if (!selectedClass?.id) {
+  const exportAttendanceToCsv = () => {
+    if (attendanceHistory.length === 0) {
       toast({
-        title: "No Class Selected",
-        description: "Please select a class to export attendance data.",
+        title: "No Records",
+        description: "There are no attendance records to export.",
       });
       return;
     }
 
-    try {
-      // First, get all students enrolled in the class
-      const enrolledQuery = query(
-        collection(firestore, 'users'),
-        where('enrolledClasses', 'array-contains', selectedClass.id)
-      );
+    // Group records by session
+    const sessionGroups: Record<string, AttendanceRecord[]> = {};
+    attendanceHistory.forEach(record => {
+      const sessionId = record.sessionId || 'unknown';
+      if (!sessionGroups[sessionId]) {
+        sessionGroups[sessionId] = [];
+      }
+      sessionGroups[sessionId].push(record);
+    });
 
-      const enrolledSnapshot = await getDocs(enrolledQuery);
-      const allStudents: Record<string, {
-        id: string,
-        name: string,
-        email: string,
-        rollNumber: string,
-      }> = {};
+    const headers = ["Session", "Name", "Roll Number", "Email", "Date", "Time", "Status"];
+    const csvRows = [headers.join(',')];
 
-      enrolledSnapshot.forEach(doc => {
-        const userData = doc.data();
-        allStudents[doc.id] = {
-          id: doc.id,
-          name: userData.displayName || userData.email || 'Unknown',
-          email: userData.email || '',
-          rollNumber: userData.rollNumber || 'N/A',
-        };
+    const sortedSessions = Object.keys(sessionGroups).sort().reverse();
+
+    sortedSessions.forEach(sessionId => {
+      const records = sessionGroups[sessionId];
+      records.forEach(record => {
+        const timestamp = record.timestamp?.toDate
+          ? record.timestamp.toDate().toLocaleTimeString()
+          : 'Unknown';
+
+        const date = record.date || 'Unknown';
+
+        const row = [
+          `"${record.sessionId || 'Unknown'}"`,
+          `"${record.userName || 'Unknown'}"`,
+          `"${record.rollNumber || 'N/A'}"`,
+          `"${record.userEmail || 'Unknown'}"`,
+          `"${date}"`,
+          `"${timestamp}"`,
+          `"${record.verified ? 'Present' : 'Absent'}"`,
+        ];
+
+        csvRows.push(row.join(','));
       });
+    });
 
-      // Group records by session
-      const sessionGroups: Record<string, AttendanceRecord[]> = {};
-      attendanceHistory.forEach(record => {
-        const sessionId = record.sessionId || 'unknown';
-        if (!sessionGroups[sessionId]) {
-          sessionGroups[sessionId] = [];
-        }
-        sessionGroups[sessionId].push(record);
-      });
+    const csvString = csvRows.join('\n');
+    const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
 
-      const headers = ["Session", "Name", "Roll Number", "Email", "Date", "Time", "Status"];
-      const csvRows = [headers.join(',')];
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `attendance_${selectedClass.name.replace(/\s/g, '_')}.csv`);
+    link.style.visibility = 'hidden';
 
-      const sortedSessions = Object.keys(sessionGroups).sort().reverse();
-
-      sortedSessions.forEach(sessionId => {
-        const records = sessionGroups[sessionId];
-        const sessionDate = records[0]?.date || 'Unknown';
-        
-        // Create a map of students who have attendance records for this session
-        const attendedStudents: Record<string, AttendanceRecord> = {};
-        records.forEach(record => {
-          if (record.userId) {
-            attendedStudents[record.userId] = record;
-          }
-        });
-        
-        // Process all enrolled students for this session
-        Object.values(allStudents).forEach(student => {
-          const record = attendedStudents[student.id];
-          
-          // For students who attended
-          if (record) {
-            const timestamp = record.timestamp?.toDate
-              ? record.timestamp.toDate().toLocaleTimeString()
-              : 'Unknown';
-              
-            const row = [
-              `"${sessionId}"`,
-              `"${student.name}"`,
-              `"${student.rollNumber}"`,
-              `"${student.email}"`,
-              `"${sessionDate}"`,
-              `"${timestamp}"`,
-              `"${record.verified ? 'Present' : 'Absent'}"`,
-            ];
-            
-            csvRows.push(row.join(','));
-          } 
-          // For students who didn't attend (absent)
-          else {
-            const row = [
-              `"${sessionId}"`,
-              `"${student.name}"`,
-              `"${student.rollNumber}"`,
-              `"${student.email}"`,
-              `"${sessionDate}"`,
-              `"N/A"`,
-              `"Absent"`,
-            ];
-            
-            csvRows.push(row.join(','));
-          }
-        });
-      });
-
-      const csvString = csvRows.join('\n');
-      const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-
-      const url = URL.createObjectURL(blob);
-      link.setAttribute('href', url);
-      link.setAttribute('download', `attendance_${selectedClass.name.replace(/\s/g, '_')}.csv`);
-      link.style.visibility = 'hidden';
-
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } catch (error) {
-      console.error("Error exporting attendance:", error);
-      toast({
-        title: "Export Failed",
-        description: "Failed to export attendance data.",
-        variant: "destructive"
-      });
-    }
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const generateAttendanceReportForSession = async (sessionId: string, records: AttendanceRecord[]) => {
-    if (!selectedClass?.id) return "";
-
+    if (records.length === 0) return "";
+    
     try {
       const sessionDate = records[0]?.date || 'Unknown date';
-
+      
       // Get all students enrolled in the class
-      const enrolledQuery = query(
-        collection(firestore, 'users'),
-        where('enrolledClasses', 'array-contains', selectedClass.id)
-      );
-
-      const enrolledSnapshot = await getDocs(enrolledQuery);
-      const allStudents: {
-        id: string,
-        name: string,
-        rollNumber: string
-      }[] = [];
-
-      enrolledSnapshot.forEach(doc => {
-        const userData = doc.data();
-        allStudents.push({
-          id: doc.id,
-          name: userData.displayName || userData.email || 'Unknown',
-          rollNumber: userData.rollNumber || 'N/A'
-        });
-      });
-
+      const enrolledStudents = [...allClassStudents];  // Use the already fetched class students
+      
       // Create a map of students who have attendance records
-      const attendedStudentsMap: Record<string, AttendanceRecord> = {};
+      const recordsByUserId: Record<string, AttendanceRecord> = {};
       records.forEach(record => {
         if (record.userId) {
-          attendedStudentsMap[record.userId] = record;
+          recordsByUserId[record.userId] = record;
         }
       });
-
-      // Sort by roll number
+      
+      // Sort function for students
       const sortByRollNumber = (a: any, b: any) => {
         const rollA = a.rollNumber || '999999';
         const rollB = b.rollNumber || '999999';
@@ -559,48 +479,48 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
         
         return rollA.localeCompare(rollB);
       };
-
-      // Split students into present and absent
-      const presentStudents = allStudents
+      
+      // Divide students into present and absent
+      const presentStudents = enrolledStudents
         .filter(student => {
-          const record = attendedStudentsMap[student.id];
+          const record = recordsByUserId[student.id];
           return record && record.verified;
         })
         .sort(sortByRollNumber);
-
-      const absentStudents = allStudents
+        
+      const absentStudents = enrolledStudents
         .filter(student => {
-          const record = attendedStudentsMap[student.id];
+          const record = recordsByUserId[student.id];
           return !record || !record.verified;
         })
         .sort(sortByRollNumber);
-
+      
       let report = `ATTENDANCE REPORT - ${selectedClass.name}\n`;
       report += `====================\n\n`;
       report += `Session: ${sessionId}\n`;
       report += `Date: ${sessionDate}\n`;
       report += `Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}\n\n`;
-
+      
       report += `PRESENT STUDENTS (${presentStudents.length}):\n`;
       report += `------------------------\n`;
-
+      
       presentStudents.forEach((student, index) => {
-        report += `${index + 1}. ${student.name} (${student.rollNumber})\n`;
+        report += `${index + 1}. ${student.name} (${student.rollNumber || 'N/A'})\n`;
       });
-
+      
       report += `\nABSENT STUDENTS (${absentStudents.length}):\n`;
       report += `------------------------\n`;
-
+      
       absentStudents.forEach((student, index) => {
-        report += `${index + 1}. ${student.name} (${student.rollNumber})\n`;
+        report += `${index + 1}. ${student.name} (${student.rollNumber || 'N/A'})\n`;
       });
-
+      
       report += `\nSESSION SUMMARY:\n`;
-      report += `Total Students: ${allStudents.length}\n`;
+      report += `Total Students: ${enrolledStudents.length}\n`;
       report += `Present: ${presentStudents.length}\n`;
       report += `Absent: ${absentStudents.length}\n`;
-      report += `Attendance Rate: ${Math.round((presentStudents.length / allStudents.length) * 100)}%\n`;
-
+      report += `Attendance Rate: ${Math.round((presentStudents.length / enrolledStudents.length) * 100)}%\n`;
+      
       return report;
     } catch (error) {
       console.error("Error generating attendance report:", error);
@@ -611,8 +531,16 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
   const copySessionReportToClipboard = async (sessionId: string, records: AttendanceRecord[]) => {
     try {
       const report = await generateAttendanceReportForSession(sessionId, records);
-      if (!report) return;
-
+      
+      if (!report) {
+        toast({
+          title: "Error",
+          description: "Could not generate report",
+          variant: "destructive",
+        });
+        return;
+      }
+      
       navigator.clipboard.writeText(report)
         .then(() => {
           toast({
