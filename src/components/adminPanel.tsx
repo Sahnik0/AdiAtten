@@ -295,14 +295,40 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
       const classData = classDoc.data() as Class;
       const sessionId = classData.currentSessionId || `${selectedClass.id}_${Date.now()}`;
 
+      // Get the real-time pending attendance data
       const pendingRef = ref(database, `attendancePending/${selectedClass.id}`);
       const pendingSnapshot = await get(pendingRef);
       const pendingData = pendingSnapshot.val() || {};
 
-      // Process pending attendance first
+      // Get all students enrolled in the class
+      const enrolledQuery = query(
+        collection(firestore, 'users'),
+        where('enrolledClasses', 'array-contains', selectedClass.id)
+      );
+
+      const enrolledSnapshot = await getDocs(enrolledQuery);
+      const enrolledStudents: {
+        id: string, 
+        email: string, 
+        displayName?: string,
+        rollNumber?: string
+      }[] = [];
+
+      enrolledSnapshot.forEach(doc => {
+        const userData = doc.data();
+        enrolledStudents.push({
+          id: doc.id,
+          email: userData.email || '',
+          displayName: userData.displayName || userData.email || '',
+          rollNumber: userData.rollNumber || ''
+        });
+      });
+
+      // Process pending attendance first - these are students who marked attendance
       for (const userId in pendingData) {
         const student = pendingData[userId];
         const attendanceId = `${userId}_${selectedClass.id}_${sessionId}`;
+        
         await setDoc(doc(firestore, 'attendance', attendanceId), {
           userId: userId,
           userEmail: student.email,
@@ -316,38 +342,27 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
         });
       }
 
-      // Mark absent students
-      const enrolledQuery = query(
-        collection(firestore, 'users'),
-        where('enrolledClasses', 'array-contains', selectedClass.id)
-      );
-
-      const enrolledSnapshot = await getDocs(enrolledQuery);
-      const enrolledStudents: any[] = [];
-
-      enrolledSnapshot.forEach(doc => {
-        enrolledStudents.push({
-          id: doc.id,
-          ...doc.data()
-        });
-      });
-
-      // Create attendance records for absent students
+      // Create attendance records for ALL enrolled students who haven't marked attendance
+      const today = new Date().toISOString().split('T')[0];
+      
       for (const student of enrolledStudents) {
-        if (pendingData[student.id]) continue; // Skip if already marked present
-
+        // Skip if student already marked attendance in pending data
+        if (pendingData[student.id]) continue;
+        
         const attendanceId = `${student.id}_${selectedClass.id}_${sessionId}`;
+        
+        // Create absent record for this student
         await setDoc(doc(firestore, 'attendance', attendanceId), {
           userId: student.id,
           userEmail: student.email,
           userName: student.displayName || student.email,
           rollNumber: student.rollNumber || '',
           timestamp: serverTimestamp(),
-          date: new Date().toISOString().split('T')[0],
-          verified: false,
+          date: today,
+          verified: false,  // Mark as absent
           classId: selectedClass.id,
           sessionId: sessionId,
-          automarked: true
+          automarked: true  // Flag that this was automatically marked
         });
       }
 
@@ -359,13 +374,15 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
         currentSessionId: null
       });
 
+      // Clear pending attendance data
       await remove(pendingRef);
 
       toast({
         title: "Session Ended",
-        description: "Attendance session has been ended and absent students marked.",
+        description: `Attendance session ended. ${enrolledStudents.length - Object.keys(pendingData).length} student(s) marked absent.`,
       });
 
+      // Refresh attendance history to show the updated records
       fetchAttendanceHistory();
 
       setClassData(prev => {
