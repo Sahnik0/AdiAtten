@@ -473,11 +473,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
       </Card>
       
       <Tabs defaultValue="live" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-4">
-          <TabsTrigger value="live" className="text-xs md:text-sm py-1.5">Live</TabsTrigger>
-          <TabsTrigger value="reports" className="text-xs md:text-sm py-1.5">Reports</TabsTrigger>
-          <TabsTrigger value="userReports" className="text-xs md:text-sm py-1.5">Issues</TabsTrigger>
-          <TabsTrigger value="settings" className="text-xs md:text-sm py-1.5">Settings</TabsTrigger>
+        <TabsList className="flex w-full">
+          <TabsTrigger value="live" className="flex-1 text-xs md:text-sm py-1.5">Live</TabsTrigger>
+          <TabsTrigger value="reports" className="flex-1 text-xs md:text-sm py-1.5">Reports</TabsTrigger>
+          <TabsTrigger value="userReports" className="flex-1 text-xs md:text-sm py-1.5">Issues</TabsTrigger>
+          <TabsTrigger value="settings" className="flex-1 text-xs md:text-sm py-1.5">Settings</TabsTrigger>
         </TabsList>
         
         <TabsContent value="live" className="mt-2 md:mt-4">
