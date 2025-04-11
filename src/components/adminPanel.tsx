@@ -7,7 +7,6 @@ import { useAuth } from '@/hooks/useAuth';
 import UserReports from '@/components/UserReports';
 import { collection, getDocs, query, where, doc, updateDoc, setDoc, serverTimestamp, getDoc, onSnapshot, writeBatch } from 'firebase/firestore';
 import { firestore, database } from '@/lib/firebase';
-import { AttendanceRecord } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Download, History, ClipboardCopy, Settings, RefreshCcw, Power, Play, Trash2, Search } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -16,6 +15,22 @@ import { ref, remove, get } from 'firebase/database';
 import { cn } from '@/lib/utils';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
+
+export interface AttendanceRecord {
+  id: string;
+  userId: string;
+  userEmail: string;
+  userName: string;
+  rollNumber?: string;
+  timestamp: any;
+  date: string;
+  verified: boolean;
+  location?: { lat: number; lng: number };
+  classId: string;
+  sessionId: string;
+  automarked?: boolean;
+  manuallyUpdated?: boolean;
+}
 
 interface AdminPanelProps {
   selectedClass: Class;
@@ -396,7 +411,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
     report += `Session: ${sessionId}\n`;
     report += `Date: ${sessionDate}\n`;
     report += `Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}\n`;
-    report += `Generated via: adiatten.vercel.app\n\n`;
     
     // Sort all records by roll number
     const sortedRecords = [...records].sort((a, b) => {
@@ -471,6 +485,34 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
       (record.rollNumber && record.rollNumber.toLowerCase().includes(query)) || 
       (record.userEmail && record.userEmail.toLowerCase().includes(query))
     );
+  };
+
+  const toggleAttendanceStatus = async (recordId: string, currentStatus: boolean) => {
+    try {
+      const attendanceRef = doc(firestore, 'attendance', recordId);
+      
+      await updateDoc(attendanceRef, {
+        verified: !currentStatus,
+        manuallyUpdated: true,
+        manualUpdateTime: serverTimestamp()
+      });
+      
+      toast({
+        title: "Attendance Updated",
+        description: `Student marked as ${!currentStatus ? 'present' : 'absent'}.`,
+      });
+      
+      // Refresh attendance history to reflect changes
+      fetchAttendanceHistory();
+      
+    } catch (error) {
+      console.error("Error updating attendance status:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update attendance status.",
+        variant: "destructive",
+      });
+    }
   };
 
   if (!selectedClass || !currentUser?.isAdmin) {
@@ -672,14 +714,20 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
                                           </td>
                                           <td className="px-2 md:px-4 py-1.5 md:py-2">{record.rollNumber || 'N/A'}</td>
                                           <td className="px-2 md:px-4 py-1.5 md:py-2">
-                                            <span className={cn(
-                                              "px-1.5 py-0.5 rounded-full text-[10px] md:text-xs",
-                                              record.verified 
-                                                ? 'bg-green-100 text-green-800' 
-                                                : 'bg-red-100 text-red-800'
-                                            )}>
+                                            <button
+                                              onClick={() => toggleAttendanceStatus(record.id, record.verified)}
+                                              className={cn(
+                                                "px-1.5 py-0.5 rounded-full text-[10px] md:text-xs w-full text-center transition-colors",
+                                                record.verified 
+                                                  ? 'bg-green-100 text-green-800 hover:bg-green-200' 
+                                                  : 'bg-red-100 text-red-800 hover:bg-red-200',
+                                                record.manuallyUpdated && 'ring-1 ring-offset-1',
+                                                "cursor-pointer"
+                                              )}
+                                              title={`Click to mark as ${record.verified ? 'absent' : 'present'}${record.manuallyUpdated ? ' (manually updated)' : ''}`}
+                                            >
                                               {record.verified ? 'Present' : 'Absent'}
-                                            </span>
+                                            </button>
                                           </td>
                                         </tr>
                                       ))}
