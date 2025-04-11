@@ -13,6 +13,7 @@ import { Download, History, ClipboardCopy, Settings, RefreshCcw, Power, Play } f
 import { useToast } from '@/hooks/use-toast';
 import GeolocationSettings from '@/components/GeolocationSettings';
 import { ref, remove, get } from 'firebase/database';
+import { cn } from '@/lib/utils';
 
 interface AdminPanelProps {
   selectedClass: Class;
@@ -417,31 +418,34 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
   const isActive = classData?.isActive || false;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       <Card>
-        <CardHeader>
-          <CardTitle className="text-2xl font-bold">Admin Dashboard for {selectedClass.name}</CardTitle>
-          <CardDescription>Manage attendance and students for {selectedClass.name}</CardDescription>
+        <CardHeader className="py-3 md:py-6">
+          <CardTitle className="text-lg md:text-2xl font-bold">
+            {selectedClass.name}
+          </CardTitle>
+          <CardDescription className="text-sm">
+            Manage attendance and students
+          </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-            <p>Use the tabs below to manage attendance and view reports for this class.</p>
-            <div className="flex space-x-2 flex-wrap gap-2">
+        <CardContent className="py-2 px-3 md:px-6">
+          <div className="flex flex-col gap-3 md:flex-row md:justify-between md:items-center">
+            <p className="text-sm md:text-base">Use the tabs below to manage attendance</p>
+            <div className="w-full md:w-auto">
               {!isActive ? (
                 <Button 
                   onClick={startAttendanceSession} 
                   variant="default"
                   disabled={startingSession}
-                  className="whitespace-nowrap"
+                  className="w-full md:w-auto text-xs md:text-sm py-1.5"
+                  size="sm"
                 >
                   {startingSession ? (
-                    <>
-                      Starting...
-                    </>
+                    <>Starting...</>
                   ) : (
                     <>
-                      <Play className="h-4 w-4 mr-2" />
-                      Start Attendance Session
+                      <Play className="h-3 w-3 mr-1.5" />
+                      Start Session
                     </>
                   )}
                 </Button>
@@ -450,16 +454,15 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
                   onClick={endAttendanceSession} 
                   variant="destructive"
                   disabled={endingSession}
-                  className="whitespace-nowrap"
+                  className="w-full md:w-auto text-xs md:text-sm py-1.5"
+                  size="sm"
                 >
                   {endingSession ? (
-                    <>
-                      Ending Session...
-                    </>
+                    <>Ending...</>
                   ) : (
                     <>
-                      <Power className="h-4 w-4 mr-2" />
-                      End Attendance Session
+                      <Power className="h-3 w-3 mr-1.5" />
+                      End Session
                     </>
                   )}
                 </Button>
@@ -469,41 +472,41 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
         </CardContent>
       </Card>
       
-      <Tabs defaultValue="live">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="live">Live Attendance</TabsTrigger>
-          <TabsTrigger value="reports">Attendance Reports</TabsTrigger>
-          <TabsTrigger value="userReports">User Issues</TabsTrigger>
-          <TabsTrigger value="settings">Settings</TabsTrigger>
+      <Tabs defaultValue="live" className="w-full">
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-4">
+          <TabsTrigger value="live" className="text-xs md:text-sm py-1.5">Live</TabsTrigger>
+          <TabsTrigger value="reports" className="text-xs md:text-sm py-1.5">Reports</TabsTrigger>
+          <TabsTrigger value="userReports" className="text-xs md:text-sm py-1.5">Issues</TabsTrigger>
+          <TabsTrigger value="settings" className="text-xs md:text-sm py-1.5">Settings</TabsTrigger>
         </TabsList>
         
-        <TabsContent value="live">
+        <TabsContent value="live" className="mt-2 md:mt-4">
           <LiveAttendanceSheet classId={selectedClass.id} />
         </TabsContent>
         
-        <TabsContent value="reports">
+        <TabsContent value="reports" className="mt-2 md:mt-4">
           <Card>
-            <CardHeader>
-              <CardTitle>Attendance Reports</CardTitle>
-              <CardDescription>View, export, and copy attendance reports for this class.</CardDescription>
+            <CardHeader className="py-3 md:py-4">
+              <CardTitle className="text-base md:text-lg">Attendance Reports</CardTitle>
+              <CardDescription className="text-xs md:text-sm">View, export, and copy attendance reports</CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-6">
-                <div className="flex flex-col sm:flex-row gap-4">
-                  <Button onClick={exportAttendanceToCsv} className="w-full">
-                    <Download className="h-4 w-4 mr-2" /> Export all as CSV
+            <CardContent className="py-2">
+              <div className="space-y-4">
+                <div className="flex flex-col gap-2">
+                  <Button onClick={exportAttendanceToCsv} className="w-full text-xs md:text-sm" size="sm">
+                    <Download className="h-3 w-3 mr-1.5" /> Export as CSV
                   </Button>
                 </div>
                 
                 {historyLoading ? (
-                  <div className="flex justify-center py-8">
-                    <History className="h-8 w-8 animate-spin text-muted-foreground" />
+                  <div className="flex justify-center py-4 md:py-8">
+                    <History className="h-6 w-6 animate-spin text-muted-foreground" />
                   </div>
                 ) : attendanceHistory.length === 0 ? (
-                  <p className="text-center py-4 text-muted-foreground">No attendance records found for this class.</p>
+                  <p className="text-center py-3 text-xs md:text-sm text-muted-foreground">No attendance records found</p>
                 ) : (
-                  <div className="space-y-4">
-                    <h3 className="font-medium text-lg">Attendance History</h3>
+                  <div className="space-y-3 md:space-y-4">
+                    <h3 className="font-medium text-sm md:text-base">Attendance History</h3>
                     
                     {Object.entries(attendanceHistory.reduce((acc, record) => {
                       const sessionId = record.sessionId || 'unknown';
@@ -520,14 +523,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
                       const totalCount = records.length;
                       
                       return (
-                        <Card key={sessionId} className="mb-4">
-                          <CardHeader className="pb-2">
-                            <div className="flex justify-between items-center">
+                        <Card key={sessionId} className="mb-3">
+                          <CardHeader className="py-2 px-3 md:px-6">
+                            <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-2">
                               <div>
-                                <CardTitle className="text-base">
-                                  Session: {sessionDate}
+                                <CardTitle className="text-xs md:text-sm">
+                                  {sessionDate}
                                 </CardTitle>
-                                <CardDescription>
+                                <CardDescription className="text-xs">
                                   Present: {presentCount}/{totalCount} ({Math.round((presentCount/totalCount) * 100)}%)
                                 </CardDescription>
                               </div>
@@ -535,44 +538,51 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
                                 size="sm" 
                                 variant="outline" 
                                 onClick={() => copySessionReportToClipboard(sessionId, records)}
+                                className="text-xs w-full md:w-auto py-1"
                               >
-                                <ClipboardCopy className="h-4 w-4 mr-1" /> Copy Report
+                                <ClipboardCopy className="h-3 w-3 mr-1" /> Copy Report
                               </Button>
                             </div>
                           </CardHeader>
-                          <CardContent>
-                            <div className="rounded-md border">
-                              <table className="w-full text-sm">
+                          <CardContent className="py-1 px-2 md:px-6">
+                            <div className="rounded-md border overflow-x-auto">
+                              <table className="w-full text-xs md:text-sm">
                                 <thead>
                                   <tr className="border-b bg-muted/50">
-                                    <th className="px-4 py-2 text-left font-medium">Name</th>
-                                    <th className="px-4 py-2 text-left font-medium">Roll Number</th>
-                                    <th className="px-4 py-2 text-left font-medium">Status</th>
-                                    <th className="px-4 py-2 text-left font-medium">Actions</th>
+                                    <th className="px-2 md:px-4 py-1.5 md:py-2 text-left font-medium">Name</th>
+                                    <th className="px-2 md:px-4 py-1.5 md:py-2 text-left font-medium">Roll No</th>
+                                    <th className="px-2 md:px-4 py-1.5 md:py-2 text-left font-medium">Status</th>
+                                    <th className="px-1 md:px-4 py-1.5 md:py-2 text-left font-medium">Action</th>
                                   </tr>
                                 </thead>
                                 <tbody>
                                   {records.map((record) => (
                                     <tr key={record.id} className="border-b">
-                                      <td className="px-4 py-2">{record.userName}</td>
-                                      <td className="px-4 py-2">{record.rollNumber || 'N/A'}</td>
-                                      <td className="px-4 py-2">
-                                        <span className={`px-2 py-1 rounded-full text-xs ${
+                                      <td className="px-2 md:px-4 py-1.5 md:py-2">
+                                        <div className="truncate max-w-[120px] md:max-w-none">
+                                          {record.userName}
+                                        </div>
+                                      </td>
+                                      <td className="px-2 md:px-4 py-1.5 md:py-2">{record.rollNumber || 'N/A'}</td>
+                                      <td className="px-2 md:px-4 py-1.5 md:py-2">
+                                        <span className={cn(
+                                          "px-1.5 py-0.5 rounded-full text-[10px] md:text-xs",
                                           record.verified 
                                             ? 'bg-green-100 text-green-800' 
                                             : 'bg-red-100 text-red-800'
-                                        }`}>
+                                        )}>
                                           {record.verified ? 'Present' : 'Absent'}
                                         </span>
                                       </td>
-                                      <td className="px-4 py-2">
+                                      <td className="px-1 md:px-4 py-1.5 md:py-2">
                                         <Button 
                                           variant="ghost" 
                                           size="sm"
                                           onClick={() => resetDeviceId(record.userId)}
                                           title="Reset Device ID"
+                                          className="h-6 w-6 p-0"
                                         >
-                                          <RefreshCcw className="h-4 w-4" />
+                                          <RefreshCcw className="h-3 w-3" />
                                         </Button>
                                       </td>
                                     </tr>
@@ -588,19 +598,19 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
                 )}
               </div>
             </CardContent>
-            <CardFooter>
-              <Button variant="outline" onClick={fetchAttendanceHistory} size="sm" className="ml-auto">
-                <History className="h-4 w-4 mr-2" /> Refresh Data
+            <CardFooter className="pt-2">
+              <Button variant="outline" onClick={fetchAttendanceHistory} size="sm" className="ml-auto text-xs md:text-sm">
+                <History className="h-3 w-3 mr-1.5" /> Refresh
               </Button>
             </CardFooter>
           </Card>
         </TabsContent>
         
-        <TabsContent value="userReports">
+        <TabsContent value="userReports" className="mt-2 md:mt-4">
           <UserReports classId={selectedClass.id} />
         </TabsContent>
         
-        <TabsContent value="settings">
+        <TabsContent value="settings" className="mt-2 md:mt-4">
           <GeolocationSettings />
         </TabsContent>
       </Tabs>
