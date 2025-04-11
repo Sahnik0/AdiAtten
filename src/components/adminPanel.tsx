@@ -47,6 +47,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
   const [deletingSession, setDeletingSession] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [exportSessionId, setExportSessionId] = useState<string | null>(null);
+  const [sessionDateFilter, setSessionDateFilter] = useState('');
   const { toast } = useToast();
   
   useEffect(() => {
@@ -522,6 +523,16 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
     );
   };
 
+  const filterSessionsByDate = (sessionEntries: [string, AttendanceRecord[]][]) => {
+    if (!sessionDateFilter.trim()) return sessionEntries;
+    
+    const query = sessionDateFilter.toLowerCase().trim();
+    return sessionEntries.filter(([_, records]) => {
+      const sessionDate = records[0]?.date || '';
+      return sessionDate.toLowerCase().includes(query);
+    });
+  };
+
   const toggleAttendanceStatus = async (recordId: string, currentStatus: boolean) => {
     try {
       const attendanceRef = doc(firestore, 'attendance', recordId);
@@ -645,10 +656,22 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
                   <p className="text-center py-3 text-xs md:text-sm text-muted-foreground">No attendance records found</p>
                 ) : (
                   <div className="space-y-3 md:space-y-4">
-                    <h3 className="font-medium text-sm md:text-base px-1">Attendance History</h3>
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2 px-1">
+                      <h3 className="font-medium text-sm md:text-base">Attendance History</h3>
+                      
+                      <div className="relative w-full md:w-auto min-w-[200px]">
+                        <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                        <Input
+                          placeholder="Filter by date (YYYY-MM-DD)"
+                          value={sessionDateFilter}
+                          onChange={(e) => setSessionDateFilter(e.target.value)}
+                          className="pl-8 text-xs h-8 w-full"
+                        />
+                      </div>
+                    </div>
                     
                     <div className="max-h-[45vh] overflow-y-auto w-full">
-                      {Object.entries(attendanceHistory.reduce((acc, record) => {
+                      {filterSessionsByDate(Object.entries(attendanceHistory.reduce((acc, record) => {
                         const sessionId = record.sessionId || 'unknown';
                         if (!acc[sessionId]) {
                           acc[sessionId] = [];
@@ -656,7 +679,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
                         acc[sessionId].push(record);
                         return acc;
                       }, {} as Record<string, AttendanceRecord[]>))
-                      .sort(([sessionIdA], [sessionIdB]) => sessionIdB.localeCompare(sessionIdA))
+                      .sort(([sessionIdA], [sessionIdB]) => sessionIdB.localeCompare(sessionIdA)))
                       .map(([sessionId, records]) => {
                         const sessionDate = records[0]?.date || 'Unknown';
                         const presentCount = records.filter(r => r.verified).length;
@@ -778,12 +801,28 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
                           </Card>
                         );
                       })}
+                      
+                      {filterSessionsByDate(Object.entries(attendanceHistory.reduce((acc, record) => {
+                        const sessionId = record.sessionId || 'unknown';
+                        if (!acc[sessionId]) {
+                          acc[sessionId] = [];
+                        }
+                        acc[sessionId].push(record);
+                        return acc;
+                      }, {} as Record<string, AttendanceRecord[]>))).length === 0 && (
+                        <div className="text-center py-4 text-muted-foreground">
+                          No sessions found matching date "{sessionDateFilter}"
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
               </div>
             </CardContent>
             <CardFooter className="pt-2 px-3 md:px-6">
+              <Button variant="outline" onClick={() => setSessionDateFilter('')} size="sm" className="text-xs md:text-sm py-1 mr-2" disabled={!sessionDateFilter.trim()}>
+                Clear Filter
+              </Button>
               <Button variant="outline" onClick={fetchAttendanceHistory} size="sm" className="ml-auto text-xs md:text-sm py-1">
                 <History className="h-3 w-3 mr-1.5" /> Refresh
               </Button>
