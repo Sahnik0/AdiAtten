@@ -46,6 +46,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
   const [deleteSessionId, setDeleteSessionId] = useState<string | null>(null);
   const [deletingSession, setDeletingSession] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [exportSessionId, setExportSessionId] = useState<string | null>(null);
   const { toast } = useToast();
   
   useEffect(() => {
@@ -339,53 +340,79 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
     }
   };
   
-  const exportAttendanceToCsv = () => {
-    if (attendanceHistory.length === 0) {
+  const exportAttendanceToCsv = (sessionId: string) => {
+    const records = attendanceHistory.filter(record => record.sessionId === sessionId);
+    
+    if (records.length === 0) {
       toast({
         title: "No Records",
-        description: "There are no attendance records to export.",
+        description: "There are no attendance records to export for this session.",
       });
       return;
     }
     
-    const sessionGroups: Record<string, AttendanceRecord[]> = {};
-    attendanceHistory.forEach(record => {
-      const sessionId = record.sessionId || 'unknown';
-      if (!sessionGroups[sessionId]) {
-        sessionGroups[sessionId] = [];
-      }
-      sessionGroups[sessionId].push(record);
-    });
+    const sessionDate = records[0]?.date || 'unknown-date';
     
-    const headers = ["Session", "Name", "Roll Number", "Email", "Date", "Time", "Status"];
+    const headers = ["Name", "Roll Number", "Email", "Date", "Time", "Status", "Manually Updated"];
     const csvRows = [];
     
     csvRows.push(headers.join(','));
     
-    const sortedSessions = Object.keys(sessionGroups).sort().reverse();
-    
-    sortedSessions.forEach(sessionId => {
-      const records = sessionGroups[sessionId];
-      records.forEach(record => {
-        const timestamp = record.timestamp?.toDate 
-          ? record.timestamp.toDate().toLocaleTimeString() 
-          : 'Unknown';
-        
-        const date = record.date || 'Unknown';
-        
-        const row = [
-          `"${record.sessionId || 'Unknown'}"`,
-          `"${record.userName || 'Unknown'}"`,
-          `"${record.rollNumber || 'N/A'}"`,
-          `"${record.userEmail || 'Unknown'}"`,
-          `"${date}"`,
-          `"${timestamp}"`,
-          `"${record.verified ? 'Present' : 'Absent'}"`,
-        ];
-        
-        csvRows.push(row.join(','));
-      });
+    const sortedRecords = [...records].sort((a, b) => {
+      const rollA = (a.rollNumber || '').toString();
+      const rollB = (b.rollNumber || '').toString();
+      
+      const numA = parseInt(rollA);
+      const numB = parseInt(rollB);
+      
+      if (!isNaN(numA) && !isNaN(numB)) {
+        return numA - numB;
+      }
+      
+      return rollA.localeCompare(rollB);
     });
+    
+    sortedRecords.forEach(record => {
+      const timestamp = record.timestamp?.toDate 
+        ? record.timestamp.toDate().toLocaleTimeString() 
+        : 'Unknown';
+      
+      const date = record.date || 'Unknown';
+      
+      const escapeCsv = (value: string) => {
+        if (/[",\n\r]/.test(value)) {
+          return `"${value.replace(/"/g, '""')}"`;
+        }
+        return value;
+      };
+      
+      const row = [
+        escapeCsv(record.userName || 'Unknown'),
+        escapeCsv(record.rollNumber || 'N/A'),
+        escapeCsv(record.userEmail || 'Unknown'),
+        escapeCsv(date),
+        escapeCsv(timestamp),
+        escapeCsv(record.verified ? 'Present' : 'Absent'),
+        escapeCsv(record.manuallyUpdated ? 'Yes' : 'No')
+      ];
+      
+      csvRows.push(row.join(','));
+    });
+    
+    csvRows.push('');
+    csvRows.push('Summary:');
+    csvRows.push(`Total Students,${records.length}`);
+    
+    const presentCount = records.filter(r => r.verified).length;
+    const absentCount = records.length - presentCount;
+    const attendanceRate = Math.round((presentCount / records.length) * 100);
+    
+    csvRows.push(`Present,${presentCount}`);
+    csvRows.push(`Absent,${absentCount}`);
+    csvRows.push(`Attendance Rate,${attendanceRate}%`);
+    csvRows.push('');
+    csvRows.push(`Generated via,adiatten.vercel.app`);
+    csvRows.push(`Export Date,${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`);
     
     const csvString = csvRows.join('\n');
     const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
@@ -393,12 +420,21 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
     
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
-    link.setAttribute('download', `attendance_${selectedClass.name.replace(/\s/g, '_')}.csv`);
+    
+    const className = selectedClass.name.replace(/\s/g, '_');
+    const filename = `attendance_${className}_${sessionDate}_${sessionId.substring(sessionId.lastIndexOf('_')+1)}.csv`;
+    
+    link.setAttribute('download', filename);
     link.style.visibility = 'hidden';
     
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    
+    toast({
+      title: "Export Complete",
+      description: "Attendance data has been exported to CSV.",
+    });
   };
 
   const generateAttendanceReportForSession = (sessionId: string, records: AttendanceRecord[]) => {
@@ -412,7 +448,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
     report += `Date: ${sessionDate}\n`;
     report += `Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}\n`;
     
-    // Sort all records by roll number
     const sortedRecords = [...records].sort((a, b) => {
       const rollA = (a.rollNumber || '').toString();
       const rollB = (b.rollNumber || '').toString();
@@ -502,7 +537,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
         description: `Student marked as ${!currentStatus ? 'present' : 'absent'}.`,
       });
       
-      // Refresh attendance history to reflect changes
       fetchAttendanceHistory();
       
     } catch (error) {
@@ -603,12 +637,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
             </CardHeader>
             <CardContent className="py-2 px-2 md:px-3">
               <div className="space-y-4">
-                <div className="flex flex-col gap-2">
-                  <Button onClick={exportAttendanceToCsv} className="w-full text-xs md:text-sm" size="sm">
-                    <Download className="h-3 w-3 mr-1.5" /> Export as CSV
-                  </Button>
-                </div>
-                
                 {historyLoading ? (
                   <div className="flex justify-center py-4 md:py-8">
                     <History className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -647,6 +675,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
                                   </CardDescription>
                                 </div>
                                 <div className="flex flex-col md:flex-row gap-2">
+                                  <Button 
+                                    size="sm" 
+                                    variant="outline" 
+                                    onClick={() => exportAttendanceToCsv(sessionId)}
+                                    className="text-xs w-full md:w-auto py-1"
+                                  >
+                                    <Download className="h-3 w-3 mr-1" /> Export
+                                  </Button>
                                   <Button 
                                     size="sm" 
                                     variant="outline" 
@@ -690,11 +726,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
                                   <tbody>
                                     {filterRecordsBySearch(records)
                                       .sort((a, b) => {
-                                        // Convert roll numbers to strings and handle null/undefined values
                                         const rollA = (a.rollNumber || '').toString();
                                         const rollB = (b.rollNumber || '').toString();
                                         
-                                        // First try numeric comparison if both are numbers
                                         const numA = parseInt(rollA);
                                         const numB = parseInt(rollB);
                                         
@@ -702,7 +736,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
                                           return numA - numB;
                                         }
                                         
-                                        // Fall back to string comparison for non-numeric or mixed roll numbers
                                         return rollA.localeCompare(rollB);
                                       })
                                       .map((record) => (
