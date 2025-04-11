@@ -700,17 +700,25 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
                         .sort(([sessionIdA], [sessionIdB]) => sessionIdB.localeCompare(sessionIdA))
                         .map(([sessionId, records]) => {
                           const sessionDate = records[0]?.date || 'Unknown';
-                          const presentCount = records.filter(r => r.verified).length;
-                          const totalCount = records.length;
-                          const searchQuery = sessionSearchQueries[sessionId] || '';
+                          
+                          const attendeesByUserId: Record<string, AttendanceRecord> = {};
+                          records.forEach(record => {
+                            if (record.userId) {
+                              attendeesByUserId[record.userId] = record;
+                            }
+                          });
 
+                          const presentCount = Object.values(attendeesByUserId).filter(r => r.verified).length;
+                          const totalAttendees = Object.keys(attendeesByUserId).length;
+
+                          const searchQuery = sessionSearchQueries[sessionId] || '';
                           const filteredRecords = searchQuery
-                            ? records.filter(r =>
+                            ? Object.values(attendeesByUserId).filter(r =>
                               r.userName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                               r.rollNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                               r.userEmail?.toLowerCase().includes(searchQuery.toLowerCase())
                             )
-                            : records;
+                            : Object.values(attendeesByUserId);
 
                           return (
                             <Card key={sessionId} className="mb-2 sm:mb-4">
@@ -721,7 +729,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
                                       Session: {sessionDate}
                                     </CardTitle>
                                     <CardDescription className="text-xs">
-                                      Present: {presentCount}/{totalCount} ({Math.round((presentCount / totalCount) * 100)}%)
+                                      Present: {presentCount}/{totalAttendees} ({totalAttendees > 0 ? Math.round((presentCount / totalAttendees) * 100) : 0}%)
                                     </CardDescription>
                                   </div>
                                   <div className="flex items-center gap-1 sm:gap-2">
@@ -773,7 +781,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
                                   </div>
                                   {searchQuery && (
                                     <p className="text-xs text-muted-foreground mt-0.5 sm:mt-1">
-                                      Found {filteredRecords.length} of {records.length} students
+                                      Found {filteredRecords.length} of {Object.keys(attendeesByUserId).length} students
                                     </p>
                                   )}
                                 </div>
@@ -812,6 +820,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
                                                       : 'bg-red-100 text-red-800'
                                                   }`}>
                                                     {record.verified ? 'Present' : 'Absent'}
+                                                    {record.automarked && ' (Auto)'}
                                                   </span>
                                                   <Button
                                                     size="sm"
