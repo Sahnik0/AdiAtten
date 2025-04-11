@@ -352,13 +352,23 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
     report += `Date: ${sessionDate}\n`;
     report += `Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}\n\n`;
     
-    const presentStudents = records
-      .filter(record => record.verified)
-      .sort((a, b) => (a.rollNumber || "").localeCompare(b.rollNumber || ""));
+    // Sort all records by roll number
+    const sortedRecords = [...records].sort((a, b) => {
+      const rollA = (a.rollNumber || '').toString();
+      const rollB = (b.rollNumber || '').toString();
       
-    const absentStudents = records
-      .filter(record => !record.verified)
-      .sort((a, b) => (a.rollNumber || "").localeCompare(b.rollNumber || ""));
+      const numA = parseInt(rollA);
+      const numB = parseInt(rollB);
+      
+      if (!isNaN(numA) && !isNaN(numB)) {
+        return numA - numB;
+      }
+      
+      return rollA.localeCompare(rollB);
+    });
+    
+    const presentStudents = sortedRecords.filter(record => record.verified);
+    const absentStudents = sortedRecords.filter(record => !record.verified);
     
     report += `PRESENT STUDENTS (${presentStudents.length}):\n`;
     report += `------------------------\n`;
@@ -556,26 +566,43 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
                                     </tr>
                                   </thead>
                                   <tbody>
-                                    {records.map((record) => (
-                                      <tr key={record.id} className="border-b">
-                                        <td className="px-2 md:px-4 py-1.5 md:py-2">
-                                          <div className="truncate max-w-[120px] md:max-w-none">
-                                            {record.userName}
-                                          </div>
-                                        </td>
-                                        <td className="px-2 md:px-4 py-1.5 md:py-2">{record.rollNumber || 'N/A'}</td>
-                                        <td className="px-2 md:px-4 py-1.5 md:py-2">
-                                          <span className={cn(
-                                            "px-1.5 py-0.5 rounded-full text-[10px] md:text-xs",
-                                            record.verified 
-                                              ? 'bg-green-100 text-green-800' 
-                                              : 'bg-red-100 text-red-800'
-                                          )}>
-                                            {record.verified ? 'Present' : 'Absent'}
-                                          </span>
-                                        </td>
-                                      </tr>
-                                    ))}
+                                    {records
+                                      .sort((a, b) => {
+                                        // Convert roll numbers to strings and handle null/undefined values
+                                        const rollA = (a.rollNumber || '').toString();
+                                        const rollB = (b.rollNumber || '').toString();
+                                        
+                                        // First try numeric comparison if both are numbers
+                                        const numA = parseInt(rollA);
+                                        const numB = parseInt(rollB);
+                                        
+                                        if (!isNaN(numA) && !isNaN(numB)) {
+                                          return numA - numB;
+                                        }
+                                        
+                                        // Fall back to string comparison for non-numeric or mixed roll numbers
+                                        return rollA.localeCompare(rollB);
+                                      })
+                                      .map((record) => (
+                                        <tr key={record.id} className="border-b">
+                                          <td className="px-2 md:px-4 py-1.5 md:py-2">
+                                            <div className="truncate max-w-[120px] md:max-w-none">
+                                              {record.userName}
+                                            </div>
+                                          </td>
+                                          <td className="px-2 md:px-4 py-1.5 md:py-2">{record.rollNumber || 'N/A'}</td>
+                                          <td className="px-2 md:px-4 py-1.5 md:py-2">
+                                            <span className={cn(
+                                              "px-1.5 py-0.5 rounded-full text-[10px] md:text-xs",
+                                              record.verified 
+                                                ? 'bg-green-100 text-green-800' 
+                                                : 'bg-red-100 text-red-800'
+                                            )}>
+                                              {record.verified ? 'Present' : 'Absent'}
+                                            </span>
+                                          </td>
+                                        </tr>
+                                      ))}
                                   </tbody>
                                 </table>
                               </div>
