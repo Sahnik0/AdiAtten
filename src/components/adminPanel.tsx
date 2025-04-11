@@ -9,12 +9,13 @@ import { collection, getDocs, query, where, doc, updateDoc, setDoc, serverTimest
 import { firestore, database } from '@/lib/firebase';
 import { AttendanceRecord } from '@/lib/types';
 import { Button } from '@/components/ui/button';
-import { Download, History, ClipboardCopy, Settings, RefreshCcw, Power, Play, Trash2 } from 'lucide-react';
+import { Download, History, ClipboardCopy, Settings, RefreshCcw, Power, Play, Trash2, Search } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import GeolocationSettings from '@/components/GeolocationSettings';
 import { ref, remove, get } from 'firebase/database';
 import { cn } from '@/lib/utils';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Input } from '@/components/ui/input';
 
 interface AdminPanelProps {
   selectedClass: Class;
@@ -29,6 +30,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
   const [classData, setClassData] = useState<Class | null>(null);
   const [deleteSessionId, setDeleteSessionId] = useState<string | null>(null);
   const [deletingSession, setDeletingSession] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const { toast } = useToast();
   
   useEffect(() => {
@@ -457,6 +459,17 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
       });
   };
 
+  const filterRecordsBySearch = (records: AttendanceRecord[]) => {
+    if (!searchQuery.trim()) return records;
+    
+    const query = searchQuery.toLowerCase().trim();
+    return records.filter(record => 
+      (record.userName && record.userName.toLowerCase().includes(query)) || 
+      (record.rollNumber && record.rollNumber.toLowerCase().includes(query)) || 
+      (record.userEmail && record.userEmail.toLowerCase().includes(query))
+    );
+  };
+
   if (!selectedClass || !currentUser?.isAdmin) {
     return (
       <Card>
@@ -609,6 +622,17 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
                               </div>
                             </CardHeader>
                             <CardContent className="py-1 px-2 md:px-6">
+                              <div className="mb-2">
+                                <div className="relative">
+                                  <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                                  <Input
+                                    placeholder="Search by name, roll number, or email..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="pl-8 text-xs h-8"
+                                  />
+                                </div>
+                              </div>
                               <div className="rounded-md border overflow-x-auto">
                                 <table className="w-full text-xs md:text-sm">
                                   <thead>
@@ -619,7 +643,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
                                     </tr>
                                   </thead>
                                   <tbody>
-                                    {records
+                                    {filterRecordsBySearch(records)
                                       .sort((a, b) => {
                                         // Convert roll numbers to strings and handle null/undefined values
                                         const rollA = (a.rollNumber || '').toString();
@@ -656,6 +680,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
                                           </td>
                                         </tr>
                                       ))}
+                                    {filterRecordsBySearch(records).length === 0 && (
+                                      <tr>
+                                        <td colSpan={3} className="text-center py-4 text-muted-foreground">
+                                          No students found matching "{searchQuery}"
+                                        </td>
+                                      </tr>
+                                    )}
                                   </tbody>
                                 </table>
                               </div>
