@@ -395,7 +395,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
     report += `====================\n\n`;
     report += `Session: ${sessionId}\n`;
     report += `Date: ${sessionDate}\n`;
-    report += `Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}\n\n`;
+    report += `Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}\n`;
+    report += `Generated via: adiatten.vercel.app\n\n`;
     
     // Sort all records by roll number
     const sortedRecords = [...records].sort((a, b) => {
@@ -430,10 +431,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
     });
     
     report += `\nSESSION SUMMARY:\n`;
+    report += `------------------------\n`;
     report += `Total Students: ${records.length}\n`;
     report += `Present: ${presentStudents.length}\n`;
     report += `Absent: ${absentStudents.length}\n`;
-    report += `Attendance Rate: ${Math.round((presentStudents.length / records.length) * 100)}%\n`;
+    report += `Attendance Rate: ${Math.round((presentStudents.length / records.length) * 100)}%\n\n`;
+    report += `This is an official attendance record generated from adiatten.vercel.app\n`;
     
     return report;
   };
