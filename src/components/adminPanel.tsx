@@ -15,6 +15,14 @@ import { ref, remove, get } from 'firebase/database';
 import { cn } from '@/lib/utils';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
+import { Calendar as CalendarIcon } from "lucide-react";
+import { format } from "date-fns";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 export interface AttendanceRecord {
   id: string;
@@ -48,6 +56,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [exportSessionId, setExportSessionId] = useState<string | null>(null);
   const [sessionDateFilter, setSessionDateFilter] = useState('');
+  const [calendarDate, setCalendarDate] = useState<Date | undefined>(undefined);
   const { toast } = useToast();
   
   useEffect(() => {
@@ -560,6 +569,16 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
     }
   };
 
+  const handleCalendarSelect = (date: Date | undefined) => {
+    setCalendarDate(date);
+    if (date) {
+      const formattedDate = format(date, "yyyy-MM-dd");
+      setSessionDateFilter(formattedDate);
+    } else {
+      setSessionDateFilter('');
+    }
+  };
+
   if (!selectedClass || !currentUser?.isAdmin) {
     return (
       <Card>
@@ -659,14 +678,37 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2 px-1">
                       <h3 className="font-medium text-sm md:text-base">Attendance History</h3>
                       
-                      <div className="relative w-full md:w-auto min-w-[200px]">
-                        <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                        <Input
-                          placeholder="Filter by date (YYYY-MM-DD)"
-                          value={sessionDateFilter}
-                          onChange={(e) => setSessionDateFilter(e.target.value)}
-                          className="pl-8 text-xs h-8 w-full"
-                        />
+                      <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto">
+                        <div className="relative flex-1">
+                          <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                          <Input
+                            placeholder="Filter by date (YYYY-MM-DD)"
+                            value={sessionDateFilter}
+                            onChange={(e) => setSessionDateFilter(e.target.value)}
+                            className="pl-8 text-xs h-8 w-full"
+                          />
+                        </div>
+                        
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              className="px-2 py-1 h-8 text-xs md:text-sm"
+                            >
+                              <CalendarIcon className="h-3.5 w-3.5 mr-1.5" />
+                              {calendarDate ? format(calendarDate, "PP") : "Pick a date"}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="end">
+                            <Calendar
+                              mode="single"
+                              selected={calendarDate}
+                              onSelect={handleCalendarSelect}
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
                       </div>
                     </div>
                     
@@ -820,7 +862,16 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
               </div>
             </CardContent>
             <CardFooter className="pt-2 px-3 md:px-6">
-              <Button variant="outline" onClick={() => setSessionDateFilter('')} size="sm" className="text-xs md:text-sm py-1 mr-2" disabled={!sessionDateFilter.trim()}>
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setSessionDateFilter('');
+                  setCalendarDate(undefined);
+                }} 
+                size="sm" 
+                className="text-xs md:text-sm py-1 mr-2" 
+                disabled={!sessionDateFilter.trim() && !calendarDate}
+              >
                 Clear Filter
               </Button>
               <Button variant="outline" onClick={fetchAttendanceHistory} size="sm" className="ml-auto text-xs md:text-sm py-1">
