@@ -508,7 +508,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
                   <div className="space-y-3 md:space-y-4">
                     <h3 className="font-medium text-sm md:text-base">Attendance History</h3>
                     
-                    <div className="max-h-[45vh] overflow-y-auto pr-1">
+                    <div className="max-h-[45vh] overflow-y-auto pr-1 w-full md:w-[98%] mx-auto">
                       {Object.entries(attendanceHistory.reduce((acc, record) => {
                         const sessionId = record.sessionId || 'unknown';
                         if (!acc[sessionId]) {
