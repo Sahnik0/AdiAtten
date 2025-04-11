@@ -601,7 +601,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
               <CardTitle className="text-base md:text-lg">Attendance Reports</CardTitle>
               <CardDescription className="text-xs md:text-sm">View, export, and copy attendance reports</CardDescription>
             </CardHeader>
-            <CardContent className="py-2">
+            <CardContent className="py-2 px-2 md:px-3">
               <div className="space-y-4">
                 <div className="flex flex-col gap-2">
                   <Button onClick={exportAttendanceToCsv} className="w-full text-xs md:text-sm" size="sm">
@@ -617,9 +617,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
                   <p className="text-center py-3 text-xs md:text-sm text-muted-foreground">No attendance records found</p>
                 ) : (
                   <div className="space-y-3 md:space-y-4">
-                    <h3 className="font-medium text-sm md:text-base">Attendance History</h3>
+                    <h3 className="font-medium text-sm md:text-base px-1">Attendance History</h3>
                     
-                    <div className="max-h-[45vh] overflow-y-auto pr-1 w-full md:w-[98%] mx-auto">
+                    <div className="max-h-[45vh] overflow-y-auto w-full">
                       {Object.entries(attendanceHistory.reduce((acc, record) => {
                         const sessionId = record.sessionId || 'unknown';
                         if (!acc[sessionId]) {
@@ -636,7 +636,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
                         
                         return (
                           <Card key={sessionId} className="mb-3">
-                            <CardHeader className="py-2 px-3 md:px-6">
+                            <CardHeader className="py-2 px-2 md:px-4">
                               <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-2">
                                 <div>
                                   <CardTitle className="text-xs md:text-sm">
@@ -666,7 +666,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
                                 </div>
                               </div>
                             </CardHeader>
-                            <CardContent className="py-1 px-2 md:px-6">
+                            <CardContent className="py-1 px-1 md:px-4">
                               <div className="mb-2">
                                 <div className="relative">
                                   <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
@@ -682,9 +682,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
                                 <table className="w-full text-xs md:text-sm">
                                   <thead>
                                     <tr className="border-b bg-muted/50">
-                                      <th className="px-2 md:px-4 py-1.5 md:py-2 text-left font-medium">Name</th>
-                                      <th className="px-2 md:px-4 py-1.5 md:py-2 text-left font-medium">Roll No</th>
-                                      <th className="px-2 md:px-4 py-1.5 md:py-2 text-left font-medium">Status</th>
+                                      <th className="px-2 md:px-3 py-1.5 md:py-2 text-left font-medium">Name</th>
+                                      <th className="px-2 md:px-3 py-1.5 md:py-2 text-left font-medium">Roll No</th>
+                                      <th className="px-2 md:px-3 py-1.5 md:py-2 text-left font-medium">Status</th>
                                     </tr>
                                   </thead>
                                   <tbody>
@@ -707,13 +707,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
                                       })
                                       .map((record) => (
                                         <tr key={record.id} className="border-b">
-                                          <td className="px-2 md:px-4 py-1.5 md:py-2">
+                                          <td className="px-2 md:px-3 py-1.5 md:py-2">
                                             <div className="truncate max-w-[120px] md:max-w-none">
                                               {record.userName}
                                             </div>
                                           </td>
-                                          <td className="px-2 md:px-4 py-1.5 md:py-2">{record.rollNumber || 'N/A'}</td>
-                                          <td className="px-2 md:px-4 py-1.5 md:py-2">
+                                          <td className="px-2 md:px-3 py-1.5 md:py-2">{record.rollNumber || 'N/A'}</td>
+                                          <td className="px-2 md:px-3 py-1.5 md:py-2">
                                             <button
                                               onClick={() => toggleAttendanceStatus(record.id, record.verified)}
                                               className={cn(
