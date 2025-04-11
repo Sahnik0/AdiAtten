@@ -5,15 +5,16 @@ import LiveAttendanceSheet from '@/components/LiveAttendanceSheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/hooks/useAuth';
 import UserReports from '@/components/UserReports';
-import { collection, getDocs, query, where, doc, updateDoc, setDoc, serverTimestamp, getDoc, onSnapshot } from 'firebase/firestore';
+import { collection, getDocs, query, where, doc, updateDoc, setDoc, serverTimestamp, getDoc, onSnapshot, writeBatch } from 'firebase/firestore';
 import { firestore, database } from '@/lib/firebase';
 import { AttendanceRecord } from '@/lib/types';
 import { Button } from '@/components/ui/button';
-import { Download, History, ClipboardCopy, Settings, RefreshCcw, Power, Play } from 'lucide-react';
+import { Download, History, ClipboardCopy, Settings, RefreshCcw, Power, Play, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import GeolocationSettings from '@/components/GeolocationSettings';
 import { ref, remove, get } from 'firebase/database';
 import { cn } from '@/lib/utils';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
 interface AdminPanelProps {
   selectedClass: Class;
@@ -26,6 +27,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
   const [endingSession, setEndingSession] = useState(false);
   const [startingSession, setStartingSession] = useState(false);
   const [classData, setClassData] = useState<Class | null>(null);
+  const [deleteSessionId, setDeleteSessionId] = useState<string | null>(null);
+  const [deletingSession, setDeletingSession] = useState(false);
   const { toast } = useToast();
   
   useEffect(() => {
@@ -255,6 +258,46 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
       });
     } finally {
       setEndingSession(false);
+    }
+  };
+
+  const deleteAttendanceSession = async (sessionId: string) => {
+    if (!sessionId) return;
+    
+    setDeletingSession(true);
+    try {
+      const attendanceQuery = query(
+        collection(firestore, 'attendance'),
+        where('sessionId', '==', sessionId),
+        where('classId', '==', selectedClass.id)
+      );
+      
+      const snapshot = await getDocs(attendanceQuery);
+      
+      const batch = writeBatch(firestore);
+      snapshot.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+      
+      await batch.commit();
+      
+      toast({
+        title: "Session Deleted",
+        description: "Attendance records for this session have been deleted.",
+      });
+      
+      fetchAttendanceHistory();
+      
+    } catch (error) {
+      console.error("Error deleting attendance session:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete attendance session.",
+        variant: "destructive",
+      });
+    } finally {
+      setDeletingSession(false);
+      setDeleteSessionId(null);
     }
   };
 
@@ -545,14 +588,24 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
                                     Present: {presentCount}/{totalCount} ({Math.round((presentCount/totalCount) * 100)}%)
                                   </CardDescription>
                                 </div>
-                                <Button 
-                                  size="sm" 
-                                  variant="outline" 
-                                  onClick={() => copySessionReportToClipboard(sessionId, records)}
-                                  className="text-xs w-full md:w-auto py-1"
-                                >
-                                  <ClipboardCopy className="h-3 w-3 mr-1" /> Copy Report
-                                </Button>
+                                <div className="flex flex-col md:flex-row gap-2">
+                                  <Button 
+                                    size="sm" 
+                                    variant="outline" 
+                                    onClick={() => copySessionReportToClipboard(sessionId, records)}
+                                    className="text-xs w-full md:w-auto py-1"
+                                  >
+                                    <ClipboardCopy className="h-3 w-3 mr-1" /> Copy
+                                  </Button>
+                                  <Button 
+                                    size="sm" 
+                                    variant="outline" 
+                                    onClick={() => setDeleteSessionId(sessionId)}
+                                    className="text-xs w-full md:w-auto py-1"
+                                  >
+                                    <Trash2 className="h-3 w-3 mr-1 text-red-500" /> Delete
+                                  </Button>
+                                </div>
                               </div>
                             </CardHeader>
                             <CardContent className="py-1 px-2 md:px-6">
@@ -631,6 +684,33 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ selectedClass }) => {
           <GeolocationSettings />
         </TabsContent>
       </Tabs>
+
+      <AlertDialog open={!!deleteSessionId} onOpenChange={(open) => !open && setDeleteSessionId(null)}>
+        <AlertDialogContent className="max-w-[90%] md:max-w-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Attendance Session</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this attendance session? This action cannot be undone.
+              All attendance records associated with this session will be permanently deleted.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+            <AlertDialogCancel disabled={deletingSession} className="mt-0">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deletingSession}
+              onClick={(e) => {
+                e.preventDefault();
+                if (deleteSessionId) {
+                  deleteAttendanceSession(deleteSessionId);
+                }
+              }}
+              className="bg-red-500 hover:bg-red-600 text-white"
+            >
+              {deletingSession ? 'Deleting...' : 'Delete Session'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
