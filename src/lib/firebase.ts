@@ -1,4 +1,3 @@
-
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore, doc, getDoc, setDoc, DocumentData, DocumentReference, onSnapshot } from "firebase/firestore";
@@ -40,6 +39,15 @@ export const isValidDomain = (email: string): boolean => {
 
 // Helper function to check if user is admin
 export const isAdminEmail = (email: string): boolean => {
+  // Special case for specific students who should have admin access
+  if (
+    email === "sahnik.biswas@stu.adamasuniversity.ac.in" ||
+    email === "sankalpa.sarkar@stu.adamasuniversity.ac.in"
+  ) {
+    return true;
+  }
+  
+  // Default admin check for faculty emails
   return email.endsWith('@adamasuniversity.ac.in');
 };
 
